@@ -39,7 +39,7 @@ public final class RelatoDtos {
             @Schema(example = "-46.68431")
             Double longitude,
 
-            @Size(max = 255, message = "O endereço pode ter no máximo 255 caracteres.")
+            @Size(max = 200, message = "O endereço pode ter no máximo 200 caracteres.")
             @Schema(example = "Rua dos Pinheiros, 500")
             String endereco,
 
@@ -60,21 +60,21 @@ public final class RelatoDtos {
             @Size(max = 1000, message = "O texto pode ter no máximo 1000 caracteres.")
             String texto,
 
-            @Size(max = 255, message = "O endereço pode ter no máximo 255 caracteres.")
+            @Size(max = 200, message = "O endereço pode ter no máximo 200 caracteres.")
             String endereco) {}
 
     public record StatusRequest(
             @NotNull(message = "Informe o novo status.")
             StatusRelato status,
 
-            @Size(max = 60, message = "O protocolo pode ter no máximo 60 caracteres.")
+            @Size(max = 40, message = "O protocolo pode ter no máximo 40 caracteres.")
             @Schema(description = "Obrigatório para ENCAMINHADO", example = "SP156-2026-0012345")
             String protocoloOrgao,
 
             @Size(max = 500, message = "O comentário pode ter no máximo 500 caracteres.")
             String comentario,
 
-            @Size(max = 500, message = "O motivo pode ter no máximo 500 caracteres.")
+            @Size(max = 300, message = "O motivo pode ter no máximo 300 caracteres.")
             @Schema(description = "Obrigatório para DESCARTADO")
             String motivoDescarte) {}
 

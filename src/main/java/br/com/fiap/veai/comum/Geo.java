@@ -1,6 +1,6 @@
 package br.com.fiap.veai.comum;
 
-/** Cálculos geográficos simples, sem extensões espaciais (funciona igual em PostgreSQL e SQL Server). */
+/** Cálculos geográficos simples, sem extensões espaciais (funciona igual em Oracle e SQL Server). */
 public final class Geo {
 
     /** Raio médio da Terra, o mesmo usado na função PL/SQL fn_distancia_metros. */

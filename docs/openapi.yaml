@@ -672,7 +672,7 @@ components:
           minLength: 0
         endereco:
           type: string
-          maxLength: 255
+          maxLength: 200
           minLength: 0
       required:
       - gravidade
@@ -791,7 +791,7 @@ components:
         endereco:
           type: string
           example: "Rua dos Pinheiros, 500"
-          maxLength: 255
+          maxLength: 200
           minLength: 0
         descricaoId:
           type: integer
@@ -992,7 +992,7 @@ components:
           type: string
           description: Obrigatório para ENCAMINHADO
           example: SP156-2026-0012345
-          maxLength: 60
+          maxLength: 40
           minLength: 0
         comentario:
           type: string
@@ -1001,7 +1001,7 @@ components:
         motivoDescarte:
           type: string
           description: Obrigatório para DESCARTADO
-          maxLength: 500
+          maxLength: 300
           minLength: 0
       required:
       - status

@@ -20,7 +20,7 @@ Este documento registra **o que foi decidido e por quê**. Onde ele diverge do e
 | Segurança | Spring Security + `oauth2-resource-server` (JWT HS256) | Suporte nativo, sem biblioteca extra. |
 | Mensageria | Spring AMQP + RabbitMQ | Opção **A** do requisito 5. |
 | Documentação | springdoc-openapi (Swagger UI) | |
-| Testes | JUnit 5 + MockMvc + **Testcontainers** | Sem H2: os testes de integração usam PostgreSQL e RabbitMQ reais. |
+| Testes | JUnit 5 + MockMvc + **Testcontainers** | Sem H2: os testes de integração usam Oracle XE e RabbitMQ reais. |
 
 ## 2. Organização do código
 
@@ -48,22 +48,25 @@ src/main/java/br/com/fiap/veai/
 
 | Perfil | Banco | Broker | Uso |
 |---|---|---|---|
-| `local` | PostgreSQL 17 no Docker (WSL) | RabbitMQ 4 no Docker (WSL) | Desenvolvimento |
-| `java` | PostgreSQL na Azure (resource group 2) | CloudAMQP | Entrega de Java Advanced |
+| `local` | Oracle XE 21 no Docker (WSL) | RabbitMQ 4 no Docker (WSL) | Desenvolvimento |
+| `fiap` | Oracle da FIAP (`oracle.fiap.com.br:1521:ORCL`) | RabbitMQ (Docker) ou CloudAMQP | Entrega de Java Advanced |
 | `azure` | Azure SQL | CloudAMQP | Entrega de DevOps |
 
-- O ambiente local sobe com `docker compose up -d` (PostgreSQL + RabbitMQ com o painel de gestão). No WSL, é preciso instalar o plugin com `sudo apt install docker-compose-v2`.
+- O ambiente local sobe com `docker compose up -d` (Oracle XE 21 + RabbitMQ com o painel de gestão). O XE 21 é a versão gratuita mais próxima do 19c da FIAP: não tem `BOOLEAN` nativo, então o Hibernate grava booleanos em `NUMBER(1)`, como no DDL. No WSL, é preciso instalar o plugin com `sudo apt install docker-compose-v2`.
 - Os containers do WSL ficam acessíveis pelo `localhost` do Windows.
-- Todos os segredos vêm de variáveis de ambiente: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_URL`, `JWT_SECRET`, `OPENAI_API_KEY`. Nenhum segredo vai para o repositório. Há um `.env.example` com os nomes, sem valores.
+- Todos os segredos vêm de variáveis de ambiente ou de um `.env` na raiz (lido pelo `spring.config.import`): `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_URL`, `JWT_SECRET`, `OPENAI_API_KEY`. O perfil também pode vir do `.env` (`SPRING_PROFILES_ACTIVE`). Nenhum segredo vai para o repositório. Há um `.env.example` com os nomes, sem valores.
 
 ## 4. Banco de dados
 
 - **Flyway** com uma pasta por fornecedor:
-  - `db/migration/postgresql`: a fonte principal.
+  - `db/migration/oracle`: a fonte principal. A V1 é o mesmo DDL do `oracle/01_ddl.sql` do repositório `database` e a V2 é o PL/SQL de `02` a `05`; a V3 acrescenta só o que a API usa (`REGIAO.latitude/longitude` e `IDEMPOTENCIA`). As migrações são **idempotentes** (criam só o que falta) e o Flyway usa `baseline-on-migrate` com versão 0 e um histórico próprio (`veai_flyway_historico`, para não se misturar com o `flyway_schema_history` do PetFlow quando o schema da FIAP é compartilhado), então a API sobe tanto num schema vazio quanto num schema da FIAP onde o `00_instalar.sql` já rodou.
   - `db/migration/sqlserver`: Azure SQL. Ela também serve como `script-bd.sql` da entrega de DevOps.
-- `spring.jpa.hibernate.ddl-auto=validate`: se uma entidade não bater com a tabela, a aplicação não sobe.
-- **Seed de demo** numa migração separada (`R__seed_demo`), ligada só nos perfis `local` e `java`, e aplicada somente se o banco estiver vazio. Ela contém as mesmas 3 regiões e os mesmos 6 usuários do repositório `database` (cidadãos Ana, Bruno, Carla e Diego; gestores Marina e Rafael), além de alguns relatos e descrições, para a fila do gestor no app não começar vazia. A senha de todos é `Veai@2026`, documentada no README.
-- **Campos JSON** (`perigos` e `objetos`) usam `@JdbcTypeCode(SqlTypes.JSON)`: `jsonb` no PostgreSQL e `nvarchar(max)` no SQL Server. Na entidade são `List<Perigo>` e `List<String>`.
+- No SQL Server, `ddl-auto=validate`: se uma entidade não bater com a tabela, a aplicação não sobe. No Oracle, `ddl-auto=none`: o DDL do repositório `database` usa `NUMBER`, `DATE` e `CLOB`, que não batem tipo a tipo com o que o Hibernate geraria (`float`, `timestamp`). O schema é garantido pelo Flyway, e os testes de integração rodam contra Oracle real.
+- **Datas no Oracle:** as colunas são `DATE` (como no DDL); o `Instant` é gravado como `TIMESTAMP` simples (`hibernate.type.preferred_instant_jdbc_type`), no fuso `DB_TIME_ZONE` (padrão UTC).
+- **Seed de demo** numa migração separada (`R__seed_demo`), ligada nos perfis `local`, `fiap` e `azure`, e aplicada somente se o banco estiver vazio. No Oracle, ela é gerada do `06_seed.sql` (mesmos IDs; os apoios são contados pelo `trg_conta_apoio`) e também troca o hash ilustrativo do `06_seed.sql` pelo da senha `Veai@2026`. Ela contém as mesmas 3 regiões e os mesmos 6 usuários do repositório `database` (cidadãos Ana, Bruno, Carla e Diego; gestores Marina e Rafael), além de alguns relatos e descrições, para a fila do gestor no app não começar vazia. A senha de todos é `Veai@2026`, documentada no README.
+- **Campos JSON** (`perigos` e `objetos`) são gravados como texto JSON por um `AttributeConverter` (`ListaJsonConverter`): `CLOB CHECK (... IS JSON)` no Oracle e `nvarchar(max)` no SQL Server. Na entidade são `List<Perigo>` e `List<String>`. O `@JdbcTypeCode(SqlTypes.JSON)` não serve no Oracle: no 21+ o Hibernate grava JSON binário (OSON) e no 19c um BLOB, e nenhum dos dois cabe numa coluna `CLOB`.
+- **Gatilhos do banco valem para a API:** o `trg_auditoria_relato` audita as mudanças feitas pela API; o `trg_conta_apoio` soma o apoio em `total_apoios` no `INSERT` do apoio, e o Hibernate grava depois o mesmo valor absoluto calculado na entidade, então o apoio não é contado em dobro.
+- **Tamanhos:** os DTOs seguem as colunas do Oracle: `endereco` 200, `protocoloOrgao` 40, `motivoDescarte` 300; a `normaReferencia` do RAG é cortada em 200.
 
 ## 5. Segurança
 
@@ -102,7 +105,7 @@ src/main/java/br/com/fiap/veai/
 ## 8. Relatos
 
 - **Região:** a `Regiao` ganha `latitude` e `longitude` (o centro do bairro). A API atribui o relato à região de centro mais próximo. O `regiaoId` no `POST /relatos` é opcional e, se vier, prevalece.
-- **Deduplicação (30 m):** a consulta JPA pré-filtra por um quadrado em volta do ponto, calculado a partir do raio (cerca de ±0,00027° de latitude e ±0,00029° de longitude em São Paulo, porque o grau de longitude encolhe com a latitude), entre relatos do **mesmo tipo** e com status **não final** (ABERTO, EM_TRIAGEM, ENCAMINHADO). Nos candidatos, a distância é calculada com Haversine em Java. É a mesma regra do PL/SQL e funciona igual em PostgreSQL e SQL Server.
+- **Deduplicação (30 m):** a consulta JPA pré-filtra por um quadrado em volta do ponto, calculado a partir do raio (cerca de ±0,00027° de latitude e ±0,00029° de longitude em São Paulo, porque o grau de longitude encolhe com a latitude), entre relatos do **mesmo tipo** e com status **não final** (ABERTO, EM_TRIAGEM, ENCAMINHADO). Nos candidatos, a distância é calculada com Haversine em Java. É a mesma regra do PL/SQL e funciona igual em Oracle e SQL Server.
 - **Respostas do `POST /relatos`**, iguais ao resultado do procedimento Oracle:
   - `201` `{resultado: "CRIADO", apoioRegistrado: false, relato}`
   - `200` `{resultado: "APOIO_REGISTRADO", apoioRegistrado: true, relato}`
@@ -146,7 +149,7 @@ src/main/java/br/com/fiap/veai/
 ## 11. Testes
 
 - **Unitários**, sem container: fórmula de prioridade, Haversine, máquina de estados, escolha da região mais próxima e regra de sugestão de relato.
-- **Integração** com Testcontainers (`@ServiceConnection`, usando PostgreSQL e RabbitMQ reais): login, 401/403, gestor fora da região, CRUD de relatos, deduplicação e apoio, idempotência, transições de status, notificações consumidas da fila e 429.
+- **Integração** com Testcontainers (`@ServiceConnection`, usando Oracle XE 21 e RabbitMQ reais): login, 401/403, gestor fora da região, CRUD de relatos, deduplicação e apoio, idempotência, transições de status, notificações consumidas da fila e 429.
 - O Maven roda **dentro do WSL** (`wsl mvn verify`), onde está o socket do Docker. O mesmo `mvn verify` roda no CI do Azure DevOps, cujo agente Ubuntu tem Docker.
 
 ## 12. Mudanças em relação ao escopo e quem precisa saber
@@ -154,6 +157,8 @@ src/main/java/br/com/fiap/veai/
 | Mudança | Impacto |
 |---|---|
 | Spring Boot **4** + Spring AI 2 (o escopo dizia Boot 3) | Atualizar `escopo-ve-ai.md` |
+| Banco da entrega de Java: **Oracle da FIAP** (perfil `fiap`) no lugar do PostgreSQL na Azure; local com Oracle XE no Docker | Repositório `database` (o schema é o mesmo) e quem roda a API localmente |
+| Limites de texto alinhados ao Oracle: `endereco` 200, `protocoloOrgao` 40, `motivoDescarte` 300 | **Lucca** (.NET) e **Pietro** (Mobile) |
 | `Regiao` com `latitude`/`longitude` e `regiaoId` opcional no `POST /relatos` | **Lucca** (.NET), **Pietro** (Mobile) e o repositório `database` (DDL, dataset e Mongo) |
 | Nova rota `POST /descricoes/{id}/pergunta` | **Lucca** e **Pietro** |
 | Resposta do `POST /relatos` com `resultado` (`CRIADO`/`APOIO_REGISTRADO`/`JA_REGISTRADO`) | **Lucca** e **Pietro** |
@@ -167,8 +172,8 @@ src/main/java/br/com/fiap/veai/
 ## 14. Achados da implementação
 
 - **Conflito de versões do Swagger:** o Spring AI 2.0.1 traz `swagger-annotations` 2.2.31/2.2.38, e o springdoc 3.2 precisa da 2.2.55. O `/v3/api-docs` falhava com `NoSuchMethodError`. As duas bibliotecas ficaram fixadas na 2.2.55 pelo `dependencyManagement` do `pom.xml`.
-- **Texto longo no SQL Server:** a coluna `corpo_resposta` usa `SqlTypes.LONG32NVARCHAR`, que vira `TEXT` no PostgreSQL e `NVARCHAR(MAX)` no SQL Server. Com `LONG32VARCHAR`, o `validate` do Hibernate recusava o SQL Server.
-- **Validação nos dois bancos:** as migrações e o `validate` do Hibernate foram testados contra PostgreSQL 17 (Testcontainers e Docker) e contra SQL Server 2022 em container, com o perfil `azure`. O SQL Server foi testado com seed, acentos, colunas JSON, idempotência e notificações.
+- **Texto longo no SQL Server:** a coluna `corpo_resposta` usa `SqlTypes.LONG32NVARCHAR`, que vira `NCLOB` no Oracle e `NVARCHAR(MAX)` no SQL Server. Com `LONG32VARCHAR`, o `validate` do Hibernate recusava o SQL Server.
+- **Validação nos dois bancos:** as migrações foram testadas contra Oracle XE 21 (Testcontainers e Docker, num schema vazio e num schema onde o `00_instalar.sql` do repositório `database` já tinha rodado) e, com o `validate` do Hibernate, contra SQL Server 2022 em container, com o perfil `azure`. O SQL Server foi testado com seed, acentos, colunas JSON, idempotência e notificações.
 - **Seed gerado do dataset do repositório `database`:** os mesmos IDs, textos, datas relativas e apoios. Os dados batem com os do Oracle e do MongoDB.
 
 ## 13. Entregáveis do repositório

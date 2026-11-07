@@ -4,13 +4,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import br.com.fiap.veai.ia.Perigo;
 import br.com.fiap.veai.relato.TipoRelato;
 import br.com.fiap.veai.usuario.Usuario;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -42,15 +40,16 @@ public class Descricao {
     @Column(nullable = false, length = 500)
     private String resumo;
 
+    /** CLOB no Oracle; a API limita a 4000 caracteres (tamanho da coluna no SQL Server). */
     @Column(name = "descricao_completa", nullable = false, length = 4000)
     private String descricaoCompleta;
 
-    /** JSON: jsonb no PostgreSQL, nvarchar(max) no SQL Server. */
-    @JdbcTypeCode(SqlTypes.JSON)
+    /** Texto JSON: CLOB com CHECK IS JSON no Oracle, nvarchar(max) com ISJSON no SQL Server. */
+    @Convert(converter = ListaJsonConverter.Perigos.class)
     @Column(nullable = false)
     private List<Perigo> perigos = new ArrayList<>();
 
-    @JdbcTypeCode(SqlTypes.JSON)
+    @Convert(converter = ListaJsonConverter.Textos.class)
     @Column(nullable = false)
     private List<String> objetos = new ArrayList<>();
 

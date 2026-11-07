@@ -58,38 +58,76 @@ API ──(depois do commit)──▶ exchange veai.relatos (topic)
 
 ## 2. Como rodar
 
-**Pré-requisitos:** Java 21, Maven 3.9+ (ou o `./mvnw` incluído) e Docker com o plugin Compose.
+**Pré-requisitos:** Java 21, Maven 3.9+ (ou o `./mvnw` incluído) e, para o banco local e os testes, Docker com o plugin Compose.
+
+A API usa **Oracle**, com o mesmo schema do repositório `database` (tabelas, funções, procedures, gatilhos e pacotes). Há duas opções de banco:
+
+| Opção | Perfil | Quando usar |
+|---|---|---|
+| Oracle da FIAP (`oracle.fiap.com.br`) | `fiap` | entrega e apresentação |
+| Oracle XE 21 no Docker (`docker-compose.yml`) | `local` (padrão) | desenvolvimento, sem depender da rede da FIAP |
 
 ```bash
-# 1. PostgreSQL 17 + RabbitMQ 4 (painel em http://localhost:15672, veai/veai)
+# 0. Configuração (o .env não vai para o git)
+cp .env.example .env
+#    edite: SPRING_PROFILES_ACTIVE, DB_USER/DB_PASSWORD (FIAP), JWT_SECRET, OPENAI_API_KEY...
+
+# 1a. Banco local: Oracle XE 21 + RabbitMQ 4 (a 1ª subida baixa ~1 GB; aguarde "healthy")
 docker compose up -d
+docker compose ps
 
-# 2. API no perfil "local" (padrão): cria o schema com Flyway e carrega o seed de demonstração
+# 1b. ...ou banco da FIAP: no .env, SPRING_PROFILES_ACTIVE=fiap e as suas credenciais.
+#     O RabbitMQ continua vindo do docker compose (ou do CloudAMQP, via RABBITMQ_URL).
+docker compose up -d rabbitmq
+
+# 2. API: o Flyway cria (ou completa) o schema e carrega o seed de demonstração
 ./mvnw spring-boot:run
 
-# 3. Abra o Swagger
-#    http://localhost:8080/swagger-ui.html
+# 3. Swagger: http://localhost:8080/swagger-ui.html
 ```
 
-Por padrão a IA roda no modo **`falso`**, com respostas fixas e sem custo. Para usar o modelo real:
+O Oracle local fica em `localhost:1521`, serviço `XEPDB1`, usuário `veai`, senha `veai` (para abrir no SQL Developer). O painel do RabbitMQ fica em http://localhost:15672 (`veai`/`veai`). `docker compose down -v` apaga os dados.
+
+Por padrão a IA roda no modo **`falso`**, com respostas fixas e sem custo. Para usar o modelo real, defina no `.env`:
 
 ```bash
-export VEAI_IA_PROVEDOR=openai
-export OPENAI_API_KEY=sk-...
-./mvnw spring-boot:run
+VEAI_IA_PROVEDOR=openai
+OPENAI_API_KEY=sk-...
 ```
 
-**Testes:** `./mvnw verify`, com 57 testes. Os testes de integração sobem **PostgreSQL e RabbitMQ reais** com Testcontainers, então é preciso ter Docker. No Windows com Docker no WSL, rode de dentro do WSL.
+**Testes:** `./mvnw verify`, com 57 testes. Os testes de integração sobem **Oracle XE e RabbitMQ reais** com Testcontainers, então é preciso ter Docker. No Windows com Docker no WSL, rode de dentro do WSL. A 1ª execução demora mais por causa do download da imagem do Oracle.
 
 **Perfis:**
 
 | Perfil | Banco | Broker | Uso |
 |---|---|---|---|
-| `local` | PostgreSQL (Docker) | RabbitMQ (Docker) | desenvolvimento |
-| `java` | Azure Database for PostgreSQL | CloudAMQP | entrega de Java Advanced |
+| `local` | Oracle XE 21 (Docker) | RabbitMQ (Docker) | desenvolvimento |
+| `fiap` | Oracle da FIAP | RabbitMQ (Docker) ou CloudAMQP | entrega de Java Advanced |
 | `azure` | Azure SQL | CloudAMQP | entrega de DevOps |
 
-Todas as variáveis estão em [.env.example](.env.example). Nenhum segredo fica no código.
+Todas as variáveis estão em [.env.example](.env.example). Nenhum segredo fica no código. Variáveis de ambiente reais têm prioridade sobre o `.env`.
+
+### Banco Oracle e o repositório `database`
+
+As migrações ficam em [src/main/resources/db/migration/oracle](src/main/resources/db/migration/oracle):
+
+| Migração | Conteúdo |
+|---|---|
+| `V1__schema.sql` | as 8 tabelas + `AUDITORIA_RELATO`, **idênticas** ao `oracle/01_ddl.sql` do repositório `database` (mesmos tipos, constraints e índices) |
+| `V2__plsql.sql` | cópia de `02_funcoes`, `03_procedures`, `04_triggers` e `05_pacotes` (sem os comandos de SQL*Plus) |
+| `V3__extensoes_api.sql` | o que só a API usa: `REGIAO.latitude/longitude` (centro do bairro) e a tabela `IDEMPOTENCIA` |
+| `db/seed/oracle/R__seed_demo.sql` | o mesmo seed do `06_seed.sql` (mesmos IDs), com a senha `Veai@2026` válida; só insere se `USUARIO` estiver vazia |
+
+As migrações **não apagam nada** e só criam o que falta. Por isso a API pode subir:
+
+- num schema **vazio** (Oracle do Docker ou usuário novo na FIAP): cria tudo;
+- num schema da FIAP **onde o `00_instalar.sql` do repositório `database` já rodou**: mantém tabelas e dados, recompila o PL/SQL, acrescenta as colunas e a tabela da API e troca o hash ilustrativo das senhas pelo de `Veai@2026`.
+
+**Schema compartilhado com outro projeto:** os nomes do Vê AI (tabelas, constraints, índices, funções, procedures, gatilhos e pacotes) não coincidem com os do PetFlow (Java e .NET), então os dois podem ficar no mesmo usuário Oracle. O histórico do Flyway do Vê AI fica numa tabela própria, `veai_flyway_historico`, separada do `flyway_schema_history` padrão que o PetFlow usa. Se o schema tiver uma tabela `USUARIO` de outro projeto, a V1 para com o erro `ORA-20100`.
+
+Os gatilhos do banco valem também para a API: o `trg_auditoria_relato` registra em `AUDITORIA_RELATO` cada mudança feita pela API, e o `trg_conta_apoio` soma o apoio em `total_apoios` (a entidade grava o mesmo valor, então nada é contado em dobro).
+
+> Se você rodar o `00_instalar.sql` de novo no mesmo schema depois da API, ele recria as tabelas sem as colunas da V3. Antes de subir a API outra vez, apague o histórico do Flyway: `DROP TABLE veai_flyway_historico PURGE;` (nunca a `flyway_schema_history`, que pode ser do PetFlow)
 
 ---
 
@@ -155,7 +193,7 @@ curl -s -X POST localhost:8080/relatos -H "Authorization: Bearer $TOKEN" \
 ## 5. Arquitetura
 
 ```
-App (React Native) ──HTTPS + JWT──▶ API Spring Boot ──JPA/Flyway──▶ PostgreSQL | Azure SQL
+App (React Native) ──HTTPS + JWT──▶ API Spring Boot ──JPA/Flyway──▶ Oracle (FIAP) | Azure SQL
                                       │   │
                                       │   └──Spring AI──▶ OpenAI (gpt-6-luna, saída estruturada)
                                       │   └──RestClient (opcional, 3 s)──▶ Serviço RAG NBR 9050 (Python)
@@ -164,7 +202,7 @@ App (React Native) ──HTTPS + JWT──▶ API Spring Boot ──JPA/Flyway�
 
 - **Código por funcionalidade:** `auth`, `usuario`, `regiao`, `descricao`, `relato`, `notificacao`, `ia`, `mensageria`, `config` e `comum`.
 - **DTOs:** todos são `record`. Os controllers nunca expõem entidades.
-- **Schema:** versionado com **Flyway**, com uma pasta por banco (`db/migration/postgresql` e `db/migration/sqlserver`). O Hibernate só valida (`ddl-auto=validate`).
+- **Schema:** versionado com **Flyway**, com uma pasta por banco (`db/migration/oracle` e `db/migration/sqlserver`). No Oracle, o schema segue o DDL do repositório `database` (`NUMBER`, `DATE`, `CLOB`), então o Hibernate não valida tipo a tipo (`ddl-auto=none`) e quem garante o schema são o Flyway e os testes de integração contra Oracle real. No SQL Server, o Hibernate valida (`ddl-auto=validate`).
 - **Descritor de imagem:** a interface `DescritorImagem` tem duas implementações, `openai` e `falso`. A troca é feita por `VEAI_IA_PROVEDOR`, sem mudar código.
 - **RAG opcional:** depois que o relato é criado, a API chama o serviço do Pedro de forma assíncrona. Se o serviço não existir ou falhar, o relato segue sem `normaReferencia`.
 

@@ -33,11 +33,11 @@ public class AtualizacaoRelato {
     private Usuario gestor;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status_anterior", nullable = false, length = 15)
+    @Column(name = "status_anterior", nullable = false, length = 12)
     private StatusRelato statusAnterior;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status_novo", nullable = false, length = 15)
+    @Column(name = "status_novo", nullable = false, length = 12)
     private StatusRelato statusNovo;
 
     @Column(length = 500)

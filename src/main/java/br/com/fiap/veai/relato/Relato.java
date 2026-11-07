@@ -44,7 +44,7 @@ public class Relato {
     private TipoRelato tipo;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 5)
     private Gravidade gravidade;
 
     @Column(nullable = false, length = 1000)
@@ -56,17 +56,17 @@ public class Relato {
     @Column(nullable = false)
     private double longitude;
 
-    @Column(length = 255)
+    @Column(length = 200)
     private String endereco;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 15)
+    @Column(nullable = false, length = 12)
     private StatusRelato status;
 
-    @Column(name = "protocolo_orgao", length = 60)
+    @Column(name = "protocolo_orgao", length = 40)
     private String protocoloOrgao;
 
-    @Column(name = "motivo_descarte", length = 500)
+    @Column(name = "motivo_descarte", length = 300)
     private String motivoDescarte;
 
     @Column(name = "total_apoios", nullable = false)
@@ -75,7 +75,7 @@ public class Relato {
     @Column(nullable = false)
     private int prioridade;
 
-    @Column(name = "norma_referencia", length = 500)
+    @Column(name = "norma_referencia", length = 200)
     private String normaReferencia;
 
     @Column(name = "criado_em", nullable = false)

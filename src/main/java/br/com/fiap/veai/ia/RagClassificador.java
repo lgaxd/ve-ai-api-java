@@ -68,8 +68,9 @@ public class RagClassificador {
             if (resposta == null || resposta.normaReferencia() == null || resposta.normaReferencia().isBlank()) {
                 return;
             }
-            String norma = resposta.normaReferencia().length() > 500
-                    ? resposta.normaReferencia().substring(0, 500) : resposta.normaReferencia();
+            // RELATO.norma_referencia é VARCHAR2(200) no Oracle (mesmo DDL do repositório database)
+            String norma = resposta.normaReferencia().length() > 200
+                    ? resposta.normaReferencia().substring(0, 200) : resposta.normaReferencia();
             transacao.executeWithoutResult(s -> relatos.findById(evento.relatoId())
                     .ifPresent(r -> r.definirNormaReferencia(norma)));
             log.info("Relato {} enriquecido pelo RAG: {}", evento.relatoId(), norma);

@@ -22,7 +22,7 @@ import com.jayway.jsonpath.JsonPath;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Base dos testes de integração: aplicação inteira + PostgreSQL e RabbitMQ reais (Testcontainers).
+ * Base dos testes de integração: aplicação inteira + Oracle XE e RabbitMQ reais (Testcontainers).
  * O contexto (e os containers) é compartilhado entre as classes de teste.
  */
 @SpringBootTest

@@ -36,7 +36,7 @@ public class RegiaoService {
     }
 
     public static Optional<Regiao> maisProxima(List<Regiao> regioes, double latitude, double longitude) {
-        return regioes.stream().min(Comparator.comparingDouble(
+        return regioes.stream().filter(Regiao::temCentro).min(Comparator.comparingDouble(
                 r -> Geo.distanciaMetros(latitude, longitude, r.getLatitude(), r.getLongitude())));
     }
 }

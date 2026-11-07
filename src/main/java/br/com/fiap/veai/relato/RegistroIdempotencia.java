@@ -39,7 +39,7 @@ public class RegistroIdempotencia {
     @Column(name = "status_http", nullable = false)
     private int statusHttp;
 
-    /** Texto longo: TEXT no PostgreSQL, NVARCHAR(MAX) no SQL Server. */
+    /** Texto longo: NCLOB no Oracle e NVARCHAR(MAX) no SQL Server (o validate do SQL Server exige o N). */
     @JdbcTypeCode(SqlTypes.LONG32NVARCHAR)
     @Column(name = "corpo_resposta", nullable = false)
     private String corpoResposta;

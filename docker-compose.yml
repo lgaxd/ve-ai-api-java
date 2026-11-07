@@ -1,25 +1,35 @@
-# Vê AI · ambiente local (perfil "local")
-# Subir:   docker compose up -d
-# Parar:   docker compose down        (os dados ficam no volume; "down -v" apaga tudo)
-# Painel do RabbitMQ: http://localhost:15672  (veai / veai)
+# Vê AI · ambiente local (perfil "local"): Oracle XE + RabbitMQ
+# Alternativa ao Oracle da FIAP para desenvolver e testar sem depender da rede da faculdade.
+#
+#   docker compose up -d        # a 1ª subida baixa as imagens; aguarde "healthy" em: docker compose ps
+#   ./mvnw spring-boot:run      # o Flyway cria tabelas, PL/SQL e seed no 1º start da API
+#   docker compose down         # para (os dados ficam no volume; "down -v" apaga tudo)
+#
+# Oracle:   localhost:1521, serviço XEPDB1, usuário veai / senha veai
+#           (SQL Developer: Host localhost · Porta 1521 · Nome do serviço XEPDB1)
+# RabbitMQ: painel em http://localhost:15672 (veai / veai)
+# Credenciais fixas de propósito: este banco é só de desenvolvimento, na sua máquina.
 name: ve-ai
 
 services:
-  postgres:
-    image: postgres:17-alpine
+  oracle:
+    # XE 21 é a versão gratuita mais próxima do Oracle 19c da FIAP (sem tipo BOOLEAN nativo,
+    # então o Hibernate grava os booleanos em NUMBER(1), igual ao DDL do repositório database)
+    image: gvenzl/oracle-xe:21-slim-faststart
     environment:
-      POSTGRES_DB: veai
-      POSTGRES_USER: veai
-      POSTGRES_PASSWORD: veai
+      ORACLE_PASSWORD: veai          # senha de SYS/SYSTEM
+      APP_USER: veai                 # schema da aplicação, criado em XEPDB1
+      APP_USER_PASSWORD: veai
     ports:
-      - "5432:5432"
+      - "1521:1521"
     volumes:
-      - postgres-dados:/var/lib/postgresql/data
+      - oracle-dados:/opt/oracle/oradata
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U veai -d veai"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
@@ -38,5 +48,5 @@ services:
       retries: 10
 
 volumes:
-  postgres-dados:
+  oracle-dados:
   rabbitmq-dados:

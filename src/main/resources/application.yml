@@ -1,13 +1,21 @@
 # =============================================================================
 # Vê AI · API Java · configuração comum a todos os perfis
-# Perfis: local (Docker no WSL) · java (Azure PostgreSQL) · azure (Azure SQL)
-# Segredos SEMPRE por variável de ambiente (ver .env.example).
+# Perfis: local (Oracle XE no docker-compose) · fiap (Oracle da FIAP) · azure (Azure SQL)
+# Segredos SEMPRE por variável de ambiente ou pelo arquivo .env (ver .env.example).
 # =============================================================================
 spring:
   application:
     name: ve-ai-api-java
+  config:
+    # Lê o .env da raiz do projeto (se existir). Variáveis de ambiente reais têm prioridade.
+    import: optional:file:.env[.properties]
   profiles:
-    default: local
+    # SPRING_PROFILES_ACTIVE pode vir do ambiente ou do .env; sem nada, sobe o perfil local
+    active: ${SPRING_PROFILES_ACTIVE:local}
+    group:
+      local: oracle
+      fiap: oracle
+      test: oracle
 
   jpa:
     open-in-view: false
@@ -15,11 +23,12 @@ spring:
       ddl-auto: validate
     properties:
       hibernate:
-        jdbc.time_zone: UTC
+        # Chaves de mapa com "_" vão entre colchetes para o Spring não alterar o nome
+        "[jdbc.time_zone]": UTC
 
   flyway:
     enabled: true
-    # db/migration/{vendor} = postgresql ou sqlserver; o seed de demo entra nos perfis que o pedem
+    # db/migration/{vendor} = oracle ou sqlserver; o seed de demo entra nos perfis que o pedem
     locations: classpath:db/migration/{vendor}
 
   servlet:
@@ -53,17 +62,19 @@ spring:
     openai:
       api-key: ${OPENAI_API_KEY:}
       chat:
-        options:
-          model: ${veai.ia.modelo}
-          temperature: 0.2
+        model: ${veai.ia.modelo}
+        temperature: 0.2
 
   jackson:
     default-property-inclusion: always
 
+  web:
+    error:
+      # Mensagens de exceção nunca vão para o cliente (o TratadorErros monta as respostas)
+      include-message: never
+
 server:
   port: ${PORT:8080}
-  error:
-    include-message: never
   forward-headers-strategy: framework
 
 management:
@@ -115,33 +126,63 @@ veai:
 
 logging:
   level:
-    br.com.fiap.veai: INFO
+    "[br.com.fiap.veai]": INFO
 
 ---
-# Desenvolvimento: PostgreSQL + RabbitMQ do docker-compose.yml (WSL), com o seed de demonstração
+# Ajustes comuns aos perfis Oracle (local, fiap e test). O schema é o mesmo do repositório
+# database (oracle/01_ddl.sql + PL/SQL), criado pelo Flyway em db/migration/oracle.
+spring:
+  config:
+    activate:
+      on-profile: oracle
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      # O Oracle da FIAP limita as sessões por aluno: poucas conexões bastam
+      maximum-pool-size: ${DB_POOL_MAX:5}
+  jpa:
+    hibernate:
+      # O schema do Oracle segue o DDL do repositório database (NUMBER, DATE, CLOB),
+      # que não bate tipo a tipo com o que o Hibernate geraria (float, timestamp...).
+      # Quem garante o schema é o Flyway; os testes de integração rodam contra Oracle real.
+      ddl-auto: none
+    properties:
+      hibernate:
+        # As colunas de data são DATE (como no 01_ddl.sql): Instant é gravado como TIMESTAMP simples
+        "[type.preferred_instant_jdbc_type]": TIMESTAMP
+        # Fuso usado para gravar/ler as colunas DATE (SYSDATE do PL/SQL usa o fuso do servidor)
+        "[jdbc.time_zone]": ${DB_TIME_ZONE:UTC}
+  flyway:
+    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
+    # Histórico próprio: o schema da FIAP pode ser compartilhado com outro projeto que também usa
+    # Flyway (ex.: PetFlow, com a tabela padrão flyway_schema_history), e os históricos não podem se misturar
+    table: veai_flyway_historico
+    # Schema da FIAP pode já ter as tabelas do repositório database (00_instalar.sql):
+    # as migrações são idempotentes, então o baseline em 0 aplica todas sem recriar nada.
+    baseline-on-migrate: true
+    baseline-version: 0
+
+---
+# Desenvolvimento: Oracle XE + RabbitMQ do docker-compose.yml (docker compose up -d)
 spring:
   config:
     activate:
       on-profile: local
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/veai}
-    username: ${DB_USER:veai}
-    password: ${DB_PASSWORD:veai}
-  flyway:
-    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
+    url: ${LOCAL_DB_URL:jdbc:oracle:thin:@//localhost:1521/XEPDB1}
+    username: ${LOCAL_DB_USER:veai}
+    password: ${LOCAL_DB_PASSWORD:veai}
 
 ---
-# Java Advanced: PostgreSQL gerenciado na Azure (resource group 2) + CloudAMQP
+# Java Advanced: Oracle da FIAP (oracle.fiap.com.br) + RabbitMQ (local ou CloudAMQP)
 spring:
   config:
     activate:
-      on-profile: java
+      on-profile: fiap
   datasource:
-    url: ${DB_URL}
+    url: ${DB_URL:jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
-  flyway:
-    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
 
 ---
 # DevOps: Azure SQL + CloudAMQP (o V1 de sqlserver é também o script-bd.sql)
@@ -157,6 +198,6 @@ spring:
     properties:
       hibernate:
         # Textos em NVARCHAR (acentos), como no V1 do SQL Server
-        use_nationalized_character_data: true
+        "[use_nationalized_character_data]": true
   flyway:
     locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}

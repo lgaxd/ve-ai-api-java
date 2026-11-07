@@ -7,7 +7,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-/** Bairro/subprefeitura atendido pela rede de apoio. latitude/longitude = centro aproximado. */
+/**
+ * Bairro/subprefeitura atendido pela rede de apoio. latitude/longitude = centro aproximado, usado para
+ * escolher a região do relato. São opcionais no Oracle (colunas acrescentadas pela API ao DDL do
+ * repositório database): uma região sem centro só é usada quando o app informa o regiaoId.
+ */
 @Entity
 @Table(name = "regiao")
 public class Regiao {
@@ -25,15 +29,13 @@ public class Regiao {
     @Column(nullable = false, length = 2)
     private String uf;
 
-    @Column(nullable = false)
-    private double latitude;
+    private Double latitude;
 
-    @Column(nullable = false)
-    private double longitude;
+    private Double longitude;
 
     protected Regiao() {}
 
-    public Regiao(String nome, String cidade, String uf, double latitude, double longitude) {
+    public Regiao(String nome, String cidade, String uf, Double latitude, Double longitude) {
         this.nome = nome;
         this.cidade = cidade;
         this.uf = uf;
@@ -45,6 +47,10 @@ public class Regiao {
     public String getNome() { return nome; }
     public String getCidade() { return cidade; }
     public String getUf() { return uf; }
-    public double getLatitude() { return latitude; }
-    public double getLongitude() { return longitude; }
+    public Double getLatitude() { return latitude; }
+    public Double getLongitude() { return longitude; }
+
+    public boolean temCentro() {
+        return latitude != null && longitude != null;
+    }
 }
