@@ -1,0 +1,18 @@
+# Testes de integração: banco e broker vêm do Testcontainers (@ServiceConnection).
+spring:
+  flyway:
+    # Mesmo schema da produção + o seed de demo (gestores e regiões usados nos testes)
+    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
+
+veai:
+  ia:
+    provedor: falso
+  rate-limit:
+    descricoes-por-minuto: 5
+  jwt:
+    segredo: segredo-dos-testes-com-mais-de-32-caracteres
+
+logging:
+  level:
+    br.com.fiap.veai: WARN
+    org.testcontainers: WARN
