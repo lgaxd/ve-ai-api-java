@@ -1,0 +1,14 @@
+Vê AI · Global Solution 2026/2
+Disciplina: Java Advanced
+Turma: 2TDSPX
+Grupo: Vê AI
+Grupo nº: ___
+
+RM 561413 - Lucas Grillo Alcântara - 2TDSPX
+RM 561469 - Pietro Ferreira Gomes Abrahamian - 2TDSPX
+RM 561792 - Pedro Peres Benitez - 2TDSPX
+RM 562027 - Lucca Ramos Mussumecci - 2TDSPX
+
+Repositório (público): ___
+Vídeo pitch (até 5 min): ___
+Deploy da API: ___
