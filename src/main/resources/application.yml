@@ -1,0 +1,162 @@
+# =============================================================================
+# Vê AI · API Java · configuração comum a todos os perfis
+# Perfis: local (Docker no WSL) · java (Azure PostgreSQL) · azure (Azure SQL)
+# Segredos SEMPRE por variável de ambiente (ver .env.example).
+# =============================================================================
+spring:
+  application:
+    name: ve-ai-api-java
+  profiles:
+    default: local
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+
+  flyway:
+    enabled: true
+    # db/migration/{vendor} = postgresql ou sqlserver; o seed de demo entra nos perfis que o pedem
+    locations: classpath:db/migration/{vendor}
+
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+  rabbitmq:
+    # CloudAMQP fornece uma URL amqps://usuario:senha@host/vhost
+    addresses: ${RABBITMQ_URL:amqp://veai:veai@localhost:5672}
+    listener:
+      simple:
+        acknowledge-mode: manual
+        # mensagem que nem chega ao listener (JSON inválido) vai para a DLQ, sem loop
+        default-requeue-rejected: false
+        prefetch: 10
+    template:
+      retry:
+        enabled: true
+        max-retries: 3
+
+  ai:
+    model:
+      # Só liga o modelo de chat da OpenAI quando veai.ia.provedor = openai
+      chat: ${veai.ia.provedor}
+      embedding: none
+      image: none
+      audio.speech: none
+      audio.transcription: none
+      moderation: none
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${veai.ia.modelo}
+          temperature: 0.2
+
+  jackson:
+    default-property-inclusion: always
+
+server:
+  port: ${PORT:8080}
+  error:
+    include-message: never
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      base-path: /
+      path-mapping:
+        health: health
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  health:
+    defaults:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+veai:
+  jwt:
+    segredo: ${JWT_SECRET:troque-este-segredo-local-com-32-caracteres-ou-mais}
+    validade: 8h
+    emissor: ve-ai-api
+  ia:
+    # openai = GPT via Spring AI (gasta créditos) · falso = respostas fixas, sem custo
+    provedor: ${VEAI_IA_PROVEDOR:falso}
+    modelo: ${OPENAI_MODEL:gpt-6-luna}
+    confianca-minima: 0.7
+    tamanho-maximo-bytes: 5242880
+  rag:
+    # Serviço RAG do Pedro (FastAPI). Vazio = desligado.
+    url: ${VEAI_RAG_URL:}
+    timeout: 3s
+  rate-limit:
+    descricoes-por-minuto: ${VEAI_RATE_LIMIT:20}
+  relato:
+    raio-deduplicacao-metros: 30
+    validade-idempotencia: 24h
+  cors:
+    origens: ${VEAI_CORS_ORIGENS:*}
+
+logging:
+  level:
+    br.com.fiap.veai: INFO
+
+---
+# Desenvolvimento: PostgreSQL + RabbitMQ do docker-compose.yml (WSL), com o seed de demonstração
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/veai}
+    username: ${DB_USER:veai}
+    password: ${DB_PASSWORD:veai}
+  flyway:
+    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
+
+---
+# Java Advanced: PostgreSQL gerenciado na Azure (resource group 2) + CloudAMQP
+spring:
+  config:
+    activate:
+      on-profile: java
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
+
+---
+# DevOps: Azure SQL + CloudAMQP (o V1 de sqlserver é também o script-bd.sql)
+spring:
+  config:
+    activate:
+      on-profile: azure
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        # Textos em NVARCHAR (acentos), como no V1 do SQL Server
+        use_nationalized_character_data: true
+  flyway:
+    locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
