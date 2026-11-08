@@ -3,6 +3,10 @@ spring:
   flyway:
     # Mesmo schema da produção + o seed de demo (gestores e regiões usados nos testes)
     locations: classpath:db/migration/{vendor},classpath:db/seed/{vendor}
+  rabbitmq:
+    # Ignora a RABBITMQ_URL do .env do desenvolvedor: com amqps:// (CloudAMQP) o Spring liga o TLS,
+    # e o RabbitMQ do Testcontainers não usa TLS. Host, porta e usuário vêm do @ServiceConnection.
+    addresses: amqp://localhost
 
 veai:
   ia:
