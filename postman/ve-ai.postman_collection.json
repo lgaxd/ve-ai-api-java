@@ -1,0 +1,2290 @@
+{
+  "info": {
+    "name": "Vê AI · API Java",
+    "description": "Coleção de testes da API do Vê AI (Global Solution 2026/2 · Java Advanced).\n\n**Como usar**\n1. Importe esta coleção e um dos ambientes da pasta `postman/` (local ou nuvem).\n2. Rode a coleção inteira, na ordem (Runner do Postman ou Newman). As pastas dependem umas das outras: o login guarda os tokens e os relatos criados são usados pelo gestor e pelas notificações.\n3. As requisições de descrição enviam `foto-calcada.jpg` e `foto-placa.jpg`, que ficam na mesma pasta. No Postman, se aparecer o aviso de arquivo não encontrado, selecione o arquivo no campo `imagem` ou configure a pasta `postman/` como Working Directory (Settings → General).\n\n**Linha de comando**\n`npx newman run postman/ve-ai.postman_collection.json -e postman/ve-ai-local.postman_environment.json --working-dir postman`\n\nPode ser executada várias vezes: cada execução cria um cidadão e relatos novos, em pontos aleatórios.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Para todo erro em JSON: o corpo segue o formato padrão da API",
+          "if (pm.response.code >= 400 && (pm.response.headers.get('Content-Type') || '').includes('json')) {",
+          "  pm.test('Erro no formato padrão {timestamp, status, erro, mensagem, campos}', () => {",
+          "    const e = pm.response.json();",
+          "    pm.expect(e).to.include.all.keys('timestamp', 'status', 'erro', 'mensagem', 'campos');",
+          "    pm.expect(e.status).to.eql(pm.response.code);",
+          "  });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "senha",
+      "value": "Veai@2026"
+    },
+    {
+      "key": "emailAna",
+      "value": "ana.souza@veai.dev"
+    },
+    {
+      "key": "emailDiego",
+      "value": "diego.rocha@veai.dev"
+    },
+    {
+      "key": "emailMarina",
+      "value": "marina.alves@ong-veai.dev"
+    },
+    {
+      "key": "emailRafael",
+      "value": "rafael.costa@cras-veai.dev"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 · Saúde",
+      "description": "Rota pública de monitoramento.",
+      "item": [
+        {
+          "name": "Health (público)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Aplicação UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 · Autenticação",
+      "description": "Login dos usuários do seed (senha Veai@2026) e cadastro de um cidadão novo. Os tokens ficam em variáveis da coleção e são usados pelas próximas pastas.",
+      "item": [
+        {
+          "name": "Login · Ana (cidadã)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Devolve JWT Bearer e papel CIDADAO\", () => {",
+                  "  pm.expect(r.token).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(r.tipo).to.eql(\"Bearer\");",
+                  "  pm.expect(r.papel).to.eql(\"CIDADAO\");",
+                  "});",
+                  "pm.collectionVariables.set(\"tokenAna\", r.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailAna}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login · Diego (cidadão)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenDiego\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailDiego}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login · Marina (gestora de Pinheiros e Sé)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Papel GESTOR\", () => pm.expect(r.papel).to.eql(\"GESTOR\"));",
+                  "pm.collectionVariables.set(\"tokenMarina\", r.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailMarina}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login · Rafael (gestor de Vila Mariana)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenRafael\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailRafael}}\",\n  \"senha\": \"{{senha}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar cidadão novo",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"emailNovo\", `postman.${Date.now()}@veai.dev`);",
+                  "pm.collectionVariables.set(\"senhaNovo\", \"Postman@2026\");"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Cria sempre como CIDADAO, sem pergunta livre\", () => {",
+                  "  pm.expect(r.papel).to.eql(\"CIDADAO\");",
+                  "  pm.expect(r.perguntaLivreAtiva).to.eql(false);",
+                  "});",
+                  "pm.test(\"Não devolve a senha\", () => pm.expect(r).to.not.have.property(\"senha\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/registrar",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cidadão do Postman\",\n  \"email\": \"{{emailNovo}}\",\n  \"senha\": \"{{senhaNovo}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login · cidadão novo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenNovo\", pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailNovo}}\",\n  \"senha\": \"{{senhaNovo}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar e-mail repetido → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/registrar",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Outra pessoa\",\n  \"email\": \"{{emailNovo}}\",\n  \"senha\": \"{{senhaNovo}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Registrar com dados inválidos → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Lista os campos inválidos\", () => {",
+                  "  const campos = pm.response.json().campos.map(c => c.campo);",
+                  "  pm.expect(campos).to.include.members([\"nome\", \"email\", \"senha\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/registrar",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"\",\n  \"email\": \"nao-e-email\",\n  \"senha\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login com senha errada → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/auth/login",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailAna}}\",\n  \"senha\": \"senha-errada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Rota protegida sem token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/usuarios/me",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 · Usuário e regiões",
+      "description": "Perfil, preferências de voz e regiões atendidas.",
+      "item": [
+        {
+          "name": "Meu perfil · Ana",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"É a Ana\", () => pm.expect(r.email).to.eql(pm.collectionVariables.get(\"emailAna\")));",
+                  "pm.collectionVariables.set(\"idAna\", r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/usuarios/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Meu perfil · Marina (lista as regiões que atende)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Atende Pinheiros e Sé\", () => {",
+                  "  const nomes = pm.response.json().regioes.map(r => r.nome);",
+                  "  pm.expect(nomes).to.include.members([\"Pinheiros\", \"Sé\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/usuarios/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Atualizar preferências · Ana",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Preferências gravadas\", () => {",
+                  "  pm.expect(r.velocidadeVoz).to.eql(1.25);",
+                  "  pm.expect(r.perguntaLivreAtiva).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/usuarios/me/preferencias",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"velocidadeVoz\": 1.25,\n  \"perguntaLivreAtiva\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Preferências fora do limite → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Aponta o campo velocidadeVoz\", () => pm.expect(pm.response.json().campos[0].campo).to.eql(\"velocidadeVoz\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/usuarios/me/preferencias",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"velocidadeVoz\": 3.0,\n  \"perguntaLivreAtiva\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Listar regiões",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"3 regiões do seed, com centro (latitude/longitude)\", () => {",
+                  "  pm.expect(r.length).to.be.at.least(3);",
+                  "  r.forEach(x => pm.expect(x).to.have.all.keys(\"id\", \"nome\", \"cidade\", \"uf\", \"latitude\", \"longitude\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/regioes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 · Descrições (IA)",
+      "description": "A foto vai em multipart (campo imagem) e nunca é gravada. Com VEAI_IA_PROVEDOR=openai a resposta vem do modelo real (10 a 20 s); no modo falso, de respostas fixas. No Postman, se o arquivo não for encontrado, selecione postman/foto-calcada.jpg ou postman/foto-placa.jpg no campo imagem.",
+      "item": [
+        {
+          "name": "Descrever ambiente (foto da calçada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Estrutura da descrição\", () => {",
+                  "  pm.expect(r.id).to.be.a(\"number\");",
+                  "  pm.expect(r.perigos).to.be.an(\"array\");",
+                  "  pm.expect(r.descricaoCompleta).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(r.resumo).to.be.a(\"string\");",
+                  "  pm.expect(r.objetos).to.be.an(\"array\");",
+                  "  pm.expect(r.latenciaMs).to.be.a(\"number\");",
+                  "});",
+                  "pm.test(\"Perigos com direção e distância\", () => r.perigos.forEach(p => {",
+                  "  pm.expect(p).to.have.all.keys(\"descricao\", \"direcao\", \"distanciaAprox\");",
+                  "  pm.expect([\"frente\", \"frente-direita\", \"direita\", \"frente-esquerda\", \"esquerda\"]).to.include(p.direcao);",
+                  "}));",
+                  "pm.test(\"Sugestão de relato só com barreira\", () => {",
+                  "  if (r.sugestaoRelato) pm.expect(r.barreiraDetectada).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set(\"descricaoId\", r.id);",
+                  "pm.test(\"Modo AMBIENTE\", () => pm.expect(r.modo).to.eql(\"AMBIENTE\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-calcada.jpg"
+                },
+                {
+                  "key": "modo",
+                  "type": "text",
+                  "value": "AMBIENTE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ler texto (foto da placa)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Estrutura da descrição\", () => {",
+                  "  pm.expect(r.id).to.be.a(\"number\");",
+                  "  pm.expect(r.perigos).to.be.an(\"array\");",
+                  "  pm.expect(r.descricaoCompleta).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(r.resumo).to.be.a(\"string\");",
+                  "  pm.expect(r.objetos).to.be.an(\"array\");",
+                  "  pm.expect(r.latenciaMs).to.be.a(\"number\");",
+                  "});",
+                  "pm.test(\"Perigos com direção e distância\", () => r.perigos.forEach(p => {",
+                  "  pm.expect(p).to.have.all.keys(\"descricao\", \"direcao\", \"distanciaAprox\");",
+                  "  pm.expect([\"frente\", \"frente-direita\", \"direita\", \"frente-esquerda\", \"esquerda\"]).to.include(p.direcao);",
+                  "}));",
+                  "pm.test(\"Sugestão de relato só com barreira\", () => {",
+                  "  if (r.sugestaoRelato) pm.expect(r.barreiraDetectada).to.eql(true);",
+                  "});",
+                  "pm.collectionVariables.set(\"descricaoTextoId\", r.id);",
+                  "pm.test(\"Modo TEXTO\", () => pm.expect(r.modo).to.eql(\"TEXTO\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-placa.jpg"
+                },
+                {
+                  "key": "modo",
+                  "type": "text",
+                  "value": "TEXTO"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Descrever sem imagem → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "modo",
+                  "type": "text",
+                  "value": "AMBIENTE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Gestor não descreve fotos → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-calcada.jpg"
+                },
+                {
+                  "key": "modo",
+                  "type": "text",
+                  "value": "AMBIENTE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Histórico paginado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Formato de página\", () => {",
+                  "  pm.expect(r).to.have.all.keys(\"conteudo\", \"pagina\", \"tamanho\", \"totalElementos\", \"totalPaginas\");",
+                  "  pm.expect(r.tamanho).to.eql(5);",
+                  "  pm.expect(r.conteudo.length).to.be.at.most(5);",
+                  "});",
+                  "pm.test(\"Mais recentes primeiro\", () => pm.expect(r.conteudo[0].id).to.eql(Number(pm.collectionVariables.get(\"descricaoTextoId\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes?page=0&size=5",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar descrição",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"É a descrição criada\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"descricaoId\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Descrição de outra pessoa → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDiego}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Avaliar como útil",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"util = true\", () => pm.expect(pm.response.json().util).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoId}}/avaliacao",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"util\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Pergunta livre por voz (Ana tem a preferência ativa)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Devolve uma resposta curta\", () => pm.expect(pm.response.json().resposta).to.be.a(\"string\").and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoId}}/pergunta",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-calcada.jpg"
+                },
+                {
+                  "key": "pergunta",
+                  "type": "text",
+                  "value": "Tem algum degrau à minha frente?"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Pergunta livre sem a preferência ativa → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoId}}/pergunta",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-calcada.jpg"
+                },
+                {
+                  "key": "pergunta",
+                  "type": "text",
+                  "value": "O que tem à frente?"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Excluir descrição (texto)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoTextoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Descrição excluída → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes/{{descricaoTextoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 · Relatos (cidadão)",
+      "description": "Regra dos 30 m, idempotência, acompanhamento, edição e exclusão.",
+      "item": [
+        {
+          "name": "Criar relato (CRIADO, região escolhida pelo GPS)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ponto aleatório perto do centro da Sé (região da Marina), para cada execução criar um relato novo",
+                  "const lat = -23.5503 - 0.004 - Math.random() * 0.004;",
+                  "const lon = -46.6339 + 0.004 + Math.random() * 0.004;",
+                  "pm.collectionVariables.set(\"lat\", lat.toFixed(6));",
+                  "pm.collectionVariables.set(\"lon\", lon.toFixed(6));",
+                  "// ~10 m ao norte: dentro do raio de 30 m da regra de deduplicação",
+                  "pm.collectionVariables.set(\"latPerto\", (lat + 0.00009).toFixed(6));",
+                  "pm.collectionVariables.set(\"chave\", `postman-${Date.now()}`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Resultado CRIADO, status ABERTO, região Sé\", () => {",
+                  "  pm.expect(r.resultado).to.eql(\"CRIADO\");",
+                  "  pm.expect(r.apoioRegistrado).to.eql(false);",
+                  "  pm.expect(r.relato.status).to.eql(\"ABERTO\");",
+                  "  pm.expect(r.relato.regiao.nome).to.eql(\"Sé\");",
+                  "});",
+                  "pm.test(\"Prioridade = peso ALTA (5) x (1 + 0 apoios) + 0 dias\", () => pm.expect(r.relato.prioridade).to.eql(5));",
+                  "pm.collectionVariables.set(\"relatoId\", r.relato.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{chave}}"
+              }
+            ],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{lat}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Repetir com a mesma Idempotency-Key (mesma resposta)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Header Idempotent-Replayed: true\", () => pm.response.to.have.header(\"Idempotent-Replayed\", \"true\"));",
+                  "pm.test(\"Mesmo relato, nada duplicado\", () => pm.expect(pm.response.json().relato.id).to.eql(Number(pm.collectionVariables.get(\"relatoId\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{chave}}"
+              }
+            ],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{lat}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Mesma Idempotency-Key com outro conteúdo → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{chave}}"
+              }
+            ],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"BAIXA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{lat}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Outra pessoa a ~10 m (APOIO_REGISTRADO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Vira +1 apoio no mesmo relato\", () => {",
+                  "  pm.expect(r.resultado).to.eql(\"APOIO_REGISTRADO\");",
+                  "  pm.expect(r.relato.id).to.eql(Number(pm.collectionVariables.get(\"relatoId\")));",
+                  "  pm.expect(r.relato.totalApoios).to.eql(1);",
+                  "});",
+                  "pm.test(\"Prioridade sobe para 5 x (1 + 1) = 10\", () => pm.expect(r.relato.prioridade).to.eql(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDiego}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{latPerto}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Mesma pessoa de novo (JA_REGISTRADO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Não conta o apoio duas vezes\", () => {",
+                  "  pm.expect(r.resultado).to.eql(\"JA_REGISTRADO\");",
+                  "  pm.expect(r.relato.totalApoios).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDiego}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{latPerto}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Relato com localização inválida → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Aponta a latitude\", () => pm.expect(pm.response.json().campos.map(c => c.campo)).to.include(\"latitude\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Teste\",\n  \"latitude\": 100,\n  \"longitude\": -46.6\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Gestor não cria relato → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{lat}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Meus relatos (paginado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Contém o relato criado\", () => pm.expect(pm.response.json().conteudo.map(r => r.id)).to.include(Number(pm.collectionVariables.get(\"relatoId\"))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/meus?page=0&size=10",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar relato · autor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar relato · quem apoiou também acompanha",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDiego}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Buscar relato · pessoa sem vínculo → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Editar relato aberto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Gravidade e prioridade atualizadas: 3 x (1 + 1) = 6\", () => {",
+                  "  const r = pm.response.json();",
+                  "  pm.expect(r.gravidade).to.eql(\"MEDIA\");",
+                  "  pm.expect(r.prioridade).to.eql(6);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"MEDIA\",\n  \"texto\": \"Rampa termina em degrau de 10 cm.\",\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Excluir relato com apoios → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Criar relato de outro tipo no mesmo ponto (sem deduplicar)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Tipo diferente não vira apoio\", () => pm.expect(pm.response.json().resultado).to.eql(\"CRIADO\"));",
+                  "pm.collectionVariables.set(\"relatoExcluirId\", pm.response.json().relato.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"OUTRO\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Rampa da faixa de pedestres termina em degrau.\",\n  \"latitude\": {{lat}},\n  \"longitude\": {{lon}},\n  \"endereco\": \"Praça da Sé, 100\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Excluir relato aberto e sem apoios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoExcluirId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 · Gestor",
+      "description": "Fila por prioridade das regiões do gestor e máquina de estados ABERTO → EM_TRIAGEM → ENCAMINHADO → RESOLVIDO (ou DESCARTADO).",
+      "item": [
+        {
+          "name": "Fila da Marina (por prioridade)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json().conteudo;",
+                  "pm.test(\"Só regiões da Marina (Pinheiros e Sé)\", () => lista.forEach(r => pm.expect([\"Pinheiros\", \"Sé\"]).to.include(r.regiao.nome)));",
+                  "pm.test(\"Ordenada por prioridade decrescente\", () => {",
+                  "  for (let i = 1; i < lista.length; i++) pm.expect(lista[i - 1].prioridade).to.be.at.least(lista[i].prioridade);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos?page=0&size=20",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Fila filtrada (Sé, ABERTO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Só ABERTO da Sé\", () => pm.response.json().conteudo.forEach(r => {",
+                  "  pm.expect(r.status).to.eql(\"ABERTO\");",
+                  "  pm.expect(r.regiao.nome).to.eql(\"Sé\");",
+                  "}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos?status=ABERTO&regiaoId=2",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Detalhe do relato",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Gestor de outra região → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenRafael}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cidadão na rota do gestor → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ABERTO → EM_TRIAGEM",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Status EM_TRIAGEM\", () => pm.expect(pm.response.json().status).to.eql(\"EM_TRIAGEM\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"EM_TRIAGEM\",\n  \"comentario\": \"Vistoria agendada.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Editar relato que não está aberto → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/relatos/{{relatoId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"RAMPA\",\n  \"gravidade\": \"ALTA\",\n  \"texto\": \"Tentativa de edição.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "ENCAMINHADO sem protocolo → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ENCAMINHADO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Protocolo maior que 40 caracteres → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ENCAMINHADO\",\n  \"protocoloOrgao\": \"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "EM_TRIAGEM → ENCAMINHADO (com protocolo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"ENCAMINHADO com protocolo\", () => {",
+                  "  pm.expect(r.status).to.eql(\"ENCAMINHADO\");",
+                  "  pm.expect(r.protocoloOrgao).to.eql(\"SP156-2026-0099999\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ENCAMINHADO\",\n  \"protocoloOrgao\": \"SP156-2026-0099999\",\n  \"comentario\": \"Encaminhado à subprefeitura.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Voltar etapa (ENCAMINHADO → ABERTO) → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"Mensagem explica a transição\", () => pm.expect(pm.response.json().mensagem).to.include(\"ENCAMINHADO\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ABERTO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Histórico de status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const h = pm.response.json();",
+                  "pm.test(\"Duas mudanças, na ordem\", () => {",
+                  "  pm.expect(h.map(x => x.statusNovo)).to.eql([\"EM_TRIAGEM\", \"ENCAMINHADO\"]);",
+                  "  pm.expect(h[0].gestorNome).to.eql(\"Marina Alves\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gestor/relatos/{{relatoId}}/historico",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 · Notificações (RabbitMQ)",
+      "description": "Geradas pelo consumidor da fila veai.notificacoes a partir dos eventos relato.criado, relato.apoiado e relato.status.",
+      "item": [
+        {
+          "name": "Notificações do autor (apoio e mudanças de status)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// As notificações são gravadas pelo consumidor RabbitMQ, de forma assíncrona: espera 3 s",
+                  "setTimeout(() => {}, 3000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json().conteudo;",
+                  "const doRelato = lista.filter(n => n.relatoId === Number(pm.collectionVariables.get(\"relatoId\")));",
+                  "pm.test(\"Recebeu apoio, triagem e encaminhamento (3 avisos)\", () => pm.expect(doRelato.length).to.eql(3));",
+                  "pm.test(\"Aviso do encaminhamento cita o protocolo\", () => pm.expect(doRelato.map(n => n.mensagem).join(\" \")).to.include(\"SP156-2026-0099999\"));",
+                  "pm.collectionVariables.set(\"notificacaoId\", doRelato[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notificacoes?page=0&size=10",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Notificações de quem apoiou (status)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const doRelato = pm.response.json().conteudo.filter(n => n.relatoId === Number(pm.collectionVariables.get(\"relatoId\")));",
+                  "pm.test(\"Apoiador é avisado das mudanças de status\", () => pm.expect(doRelato.length).to.eql(2));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notificacoes?lida=false&size=50",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDiego}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Notificações da gestora (relato novo na região)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Gestora recebeu o relato.criado\", () => {",
+                  "  const ids = pm.response.json().conteudo.map(n => n.relatoId);",
+                  "  pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"relatoId\")));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notificacoes?size=50",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenMarina}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Marcar como lida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"lida = true\", () => pm.expect(pm.response.json().lida).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/notificacoes/{{notificacaoId}}/lida",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenNovo}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Notificação de outra pessoa → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/notificacoes/{{notificacaoId}}/lida",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -18,6 +18,7 @@ Esta é a API consumida pelo app mobile (React Native). O mesmo contrato também
 | Deploy da API (Swagger) | `___` |
 | Vídeo pitch | `___` |
 | Contrato OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
+| Coleção Postman | [postman/](postman) (60 requisições com testes automáticos) |
 | Decisões de arquitetura | [docs/decisoes-arquitetura.md](docs/decisoes-arquitetura.md) |
 
 ---
@@ -194,6 +195,30 @@ Todas as rotas, exceto `/auth/**`, `/health` e o Swagger, exigem `Authorization:
 - **Status:** `ABERTO → EM_TRIAGEM → ENCAMINHADO → RESOLVIDO`, sem pular etapa e sem voltar. `DESCARTADO` pode vir de qualquer status não final e exige motivo. `ENCAMINHADO` exige o protocolo do órgão. Transição inválida responde **422**.
 - **Deduplicação:** um relato **não finalizado**, do **mesmo tipo** e a **até 30 m** (Haversine) recebe +1 apoio em vez de virar um relato novo.
 - **Privacidade:** a foto nunca é gravada (nem em banco, nem em disco, nem em log) e o GPS só é guardado no relato.
+
+### Coleção Postman
+
+A pasta [postman/](postman) tem a coleção `ve-ai.postman_collection.json`, com **60 requisições e 129 testes automáticos**, os ambientes `local` e `nuvem` e as duas fotos usadas nas descrições.
+
+| Pasta | O que cobre |
+|---|---|
+| 00 · Saúde | `/health` público |
+| 01 · Autenticação | login dos 4 usuários do seed, cadastro de cidadão, e-mail repetido (409), validação (400), senha errada e rota sem token (401) |
+| 02 · Usuário e regiões | perfil, regiões da gestora, preferências de voz (e limite inválido) |
+| 03 · Descrições (IA) | foto da calçada (AMBIENTE), placa (TEXTO), histórico paginado, avaliação, pergunta livre, exclusão, 400/403/404 |
+| 04 · Relatos | regra dos 30 m (CRIADO, APOIO_REGISTRADO, JA_REGISTRADO), `Idempotency-Key` (repetição e conflito), edição, exclusão (409 com apoios) |
+| 05 · Gestor | fila por prioridade e filtros, gestor de outra região (403), máquina de estados com protocolo, transições inválidas (422) e histórico |
+| 06 · Notificações | avisos gerados pelo consumidor RabbitMQ para autor, apoiador e gestora; marcar como lida |
+
+**No Postman:** importe a coleção e um dos ambientes e rode a coleção inteira, na ordem (*Run collection*). Cada pasta usa os tokens e os relatos criados nas anteriores. Se o Postman não achar as fotos, selecione os arquivos da pasta `postman/` no campo `imagem` das requisições de descrição, ou configure essa pasta como *Working Directory* em *Settings → General*.
+
+**Pela linha de comando** (com Node.js):
+
+```bash
+npx newman run postman/ve-ai.postman_collection.json -e postman/ve-ai-local.postman_environment.json --working-dir postman
+```
+
+A coleção pode ser executada várias vezes seguidas: cada execução cria um cidadão novo e relatos em pontos aleatórios. Ela funciona com a IA real e no modo `falso`.
 
 ### Exemplo rápido (curl)
 
