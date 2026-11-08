@@ -30,7 +30,7 @@ class DescricaoIntegracaoTest extends IntegracaoTest {
         String token = novoCidadao();
         descrever(token, foto(0), "AMBIENTE")
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.perigos[0].descricao").value("poste no meio da calçada"))
+                .andExpect(jsonPath("$.perigos[0].descricao").value("Poste no meio da calçada, deixando pouco espaço para passar."))
                 .andExpect(jsonPath("$.barreiraDetectada").value(true))
                 .andExpect(jsonPath("$.barreiraTipo").value("OBSTRUCAO_PERMANENTE"))
                 .andExpect(jsonPath("$.sugestaoRelato.pergunta").value("Parece haver calçada obstruída. Quer avisar a rede de apoio?"))
@@ -42,11 +42,11 @@ class DescricaoIntegracaoTest extends IntegracaoTest {
     void naoSugere() throws Exception {
         String token = novoCidadao();
         descrever(token, foto(1), "AMBIENTE").andExpect(status().isCreated())
-                .andExpect(jsonPath("$.perigos[0].descricao").value("bicicleta se aproximando"))
+                .andExpect(jsonPath("$.perigos[0].descricao").value("Bicicleta vindo em sua direção pela calçada."))
                 .andExpect(jsonPath("$.barreiraDetectada").value(false))
                 .andExpect(jsonPath("$.sugestaoRelato").isEmpty());
         descrever(token, foto(3), "AMBIENTE").andExpect(status().isCreated())
-                .andExpect(jsonPath("$.resumo").value("Não consegui ver bem: a foto está escura."))
+                .andExpect(jsonPath("$.resumo").value("A foto está escura. Aponte o celular para a frente, com mais luz."))
                 .andExpect(jsonPath("$.sugestaoRelato").isEmpty());
     }
 

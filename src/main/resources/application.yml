@@ -63,7 +63,10 @@ spring:
       api-key: ${OPENAI_API_KEY:}
       chat:
         model: ${veai.ia.modelo}
-        temperature: 0.2
+        # Vazio = não envia temperature. Os modelos de raciocínio (GPT-5 em diante, como o
+        # gpt-6-luna) recusam qualquer valor diferente do padrão (1) com HTTP 400.
+        # Para modelos como gpt-4o/gpt-4.1, dá para fixar, por exemplo, OPENAI_TEMPERATURE=0.2.
+        temperature: ${OPENAI_TEMPERATURE:}
 
   jackson:
     default-property-inclusion: always
