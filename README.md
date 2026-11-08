@@ -58,9 +58,33 @@ API ──(depois do commit)──▶ exchange veai.relatos (topic)
 
 ## 2. Como rodar
 
-**Pré-requisitos:** Java 21, Maven 3.9+ (ou o `./mvnw` incluído) e, para o banco local e os testes, Docker com o plugin Compose.
+A avaliação usa a API **na nuvem** (link no topo). Para testar na própria máquina, há duas opções:
 
-A API usa **Oracle**, com o mesmo schema do repositório `database` (tabelas, funções, procedures, gatilhos e pacotes). Há duas opções de banco:
+### Opção A · Tudo com Docker (só precisa de Docker)
+
+API Java, Oracle XE 21 e RabbitMQ sobem juntos, sem instalar Java nem Maven:
+
+```bash
+# Coloque na raiz do projeto o .env fornecido pela equipe (ou: cp .env.example .env)
+docker compose up -d --build   # 1ª vez: baixa as imagens (~1,5 GB) e compila a API; leva alguns minutos
+docker compose ps              # aguarde api, oracle e rabbitmq ficarem "healthy" (1 a 3 min)
+```
+
+- **Swagger:** http://localhost:8080/swagger-ui.html. Faça login em `POST /auth/login` com `ana.souza@veai.dev` / `Veai@2026` e use o token no botão **Authorize**.
+- **Saúde:** http://localhost:8080/health
+- **RabbitMQ:** http://localhost:15672 (`veai`/`veai`)
+- **Oracle:** `localhost:1521`, serviço `XEPDB1`, usuário `veai`, senha `veai` (SQL Developer)
+- **Parar:** `docker compose down`. Para apagar também os dados: `docker compose down -v`.
+
+Dentro do compose, a API usa **sempre** o Oracle e o RabbitMQ dos containers, mesmo que o `.env` aponte para a FIAP. Do `.env` ela usa só a chave da OpenAI (`VEAI_IA_PROVEDOR=openai` + `OPENAI_API_KEY`), o `JWT_SECRET` e os opcionais. Sem `.env`, tudo sobe do mesmo jeito, com a IA no modo `falso` (respostas fixas, sem custo).
+
+Se alguma porta estiver ocupada, defina no `.env`, por exemplo: `API_PORT=18080`, `ORACLE_PORT=11521`, `RABBITMQ_PORT=15673` e `RABBITMQ_PAINEL_PORT=15674`.
+
+> A imagem do Oracle XE só existe para `linux/amd64`. Em Mac com Apple Silicon ela roda emulada, mais devagar.
+
+### Opção B · Desenvolvimento (Java 21 + Maven)
+
+A API roda pela IDE ou pelo Maven, e o Docker sobe só a infraestrutura. Há duas opções de banco:
 
 | Opção | Perfil | Quando usar |
 |---|---|---|
@@ -72,12 +96,10 @@ A API usa **Oracle**, com o mesmo schema do repositório `database` (tabelas, fu
 cp .env.example .env
 #    edite: SPRING_PROFILES_ACTIVE, DB_USER/DB_PASSWORD (FIAP), JWT_SECRET, OPENAI_API_KEY...
 
-# 1a. Banco local: Oracle XE 21 + RabbitMQ 4 (a 1ª subida baixa ~1 GB; aguarde "healthy")
-docker compose up -d
-docker compose ps
+# 1a. Banco local: só Oracle + RabbitMQ (sem o container da API)
+docker compose up -d oracle rabbitmq
 
 # 1b. ...ou banco da FIAP: no .env, SPRING_PROFILES_ACTIVE=fiap e as suas credenciais.
-#     O RabbitMQ continua vindo do docker compose (ou do CloudAMQP, via RABBITMQ_URL).
 docker compose up -d rabbitmq
 
 # 2. API: o Flyway cria (ou completa) o schema e carrega o seed de demonstração
@@ -85,8 +107,6 @@ docker compose up -d rabbitmq
 
 # 3. Swagger: http://localhost:8080/swagger-ui.html
 ```
-
-O Oracle local fica em `localhost:1521`, serviço `XEPDB1`, usuário `veai`, senha `veai` (para abrir no SQL Developer). O painel do RabbitMQ fica em http://localhost:15672 (`veai`/`veai`). `docker compose down -v` apaga os dados.
 
 Por padrão a IA roda no modo **`falso`**, com respostas fixas e sem custo. Para usar o modelo real, defina no `.env`:
 

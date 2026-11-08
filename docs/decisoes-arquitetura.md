@@ -52,7 +52,7 @@ src/main/java/br/com/fiap/veai/
 | `fiap` | Oracle da FIAP (`oracle.fiap.com.br:1521:ORCL`) | RabbitMQ (Docker) ou CloudAMQP | Entrega de Java Advanced |
 | `azure` | Azure SQL | CloudAMQP | Entrega de DevOps |
 
-- O ambiente local sobe com `docker compose up -d` (Oracle XE 21 + RabbitMQ com o painel de gestão). O XE 21 é a versão gratuita mais próxima do 19c da FIAP: não tem `BOOLEAN` nativo, então o Hibernate grava booleanos em `NUMBER(1)`, como no DDL. No WSL, é preciso instalar o plugin com `sudo apt install docker-compose-v2`.
+- O ambiente local sobe com `docker compose up -d --build`: API (imagem do `Dockerfile`, multi-stage com Maven e JRE 21), Oracle XE 21 e RabbitMQ com o painel de gestão. Dentro do compose a API usa sempre os containers, mesmo que o `.env` aponte para a FIAP, para o professor poder testar tudo localmente com o `.env` da equipe. Para desenvolver, `docker compose up -d oracle rabbitmq` sobe só a infraestrutura. O XE 21 é a versão gratuita mais próxima do 19c da FIAP: não tem `BOOLEAN` nativo, então o Hibernate grava booleanos em `NUMBER(1)`, como no DDL. No WSL, é preciso instalar o plugin com `sudo apt install docker-compose-v2`.
 - Os containers do WSL ficam acessíveis pelo `localhost` do Windows.
 - Todos os segredos vêm de variáveis de ambiente ou de um `.env` na raiz (lido pelo `spring.config.import`): `DB_URL`, `DB_USER`, `DB_PASSWORD`, `RABBITMQ_URL`, `JWT_SECRET`, `OPENAI_API_KEY`. O perfil também pode vir do `.env` (`SPRING_PROFILES_ACTIVE`). Nenhum segredo vai para o repositório. Há um `.env.example` com os nomes, sem valores.
 
