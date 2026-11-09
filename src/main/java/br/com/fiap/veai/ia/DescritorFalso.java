@@ -14,7 +14,7 @@ import br.com.fiap.veai.relato.TipoRelato;
  * Descritor sem IA, para desenvolvimento e testes. A mesma foto sempre gera a mesma resposta
  * (o cenário é escolhido pelo conteúdo dos bytes), e há cenários para cada caminho do app:
  * barreira com confiança alta, barreira com confiança baixa, só perigo momentâneo e foto escura.
- * A mesma foto repetida no modo automático volta com {@code novidade = false}.
+ * A mesma foto repetida no modo automático volta com {@code novidade = false} e uma confirmação curta.
  */
 @Component
 @ConditionalOnProperty(name = "veai.ia.provedor", havingValue = "falso", matchIfMissing = true)
@@ -70,8 +70,8 @@ public class DescritorFalso implements DescritorImagem {
             Barreira.nenhuma());
 
     /**
-     * No modo automático, simula a comparação do modelo: se a pessoa acabou de ouvir exatamente esta
-     * cena, não há novidade e a descricaoCompleta vira a frase curta do histórico (o resumo).
+     * No modo automático, simula a comparação do modelo: se a foto anterior era a mesma cena (mesmo resumo),
+     * não há novidade e a descricaoCompleta vira uma confirmação curta, que o app também fala.
      */
     @Override
     public DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo, ContextoAnterior anterior) {
@@ -79,11 +79,22 @@ public class DescritorFalso implements DescritorImagem {
             return TEXTO;
         }
         DescricaoIA cena = CENARIOS.get(cenarioDe(imagem.bytes()));
-        if (anterior != null && cena.descricaoCompleta().equals(anterior.descricaoCompleta())) {
-            return new DescricaoIA(cena.perigos(), cena.resumo(), cena.resumo(), false, cena.objetos(),
+        if (anterior != null && cena.resumo().equals(anterior.resumo())) {
+            return new DescricaoIA(cena.perigos(), cena.resumo(), confirmacao(cena.objetos()), false, cena.objetos(),
                     cena.textoLido(), cena.barreira());
         }
         return cena;
+    }
+
+    /** "Poste, muro e lixeira continuam no mesmo lugar, à sua frente." */
+    static String confirmacao(List<String> objetos) {
+        if (objetos.isEmpty()) {
+            return "Nada mudou à sua frente.";
+        }
+        String lista = objetos.size() == 1 ? objetos.get(0)
+                : String.join(", ", objetos.subList(0, objetos.size() - 1)) + " e " + objetos.get(objetos.size() - 1);
+        String verbo = objetos.size() == 1 ? " continua" : " continuam";
+        return Character.toUpperCase(lista.charAt(0)) + lista.substring(1) + verbo + " no mesmo lugar, à sua frente.";
     }
 
     @Override

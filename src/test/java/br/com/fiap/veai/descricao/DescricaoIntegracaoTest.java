@@ -38,27 +38,32 @@ class DescricaoIntegracaoTest extends IntegracaoTest {
     }
 
     @Test
-    @DisplayName("modo automático: mesma cena não é novidade nem repete a sugestão; cena nova é novidade")
+    @DisplayName("modo automático: mesma cena vira confirmação curta e não repete a sugestão; cena nova é novidade")
     void modoAutomatico() throws Exception {
         String token = novoCidadao();
-        // 1ª foto (modo manual ou início da caminhada): novidade sempre true, com sugestão
-        Integer falada = ler(descrever(token, foto(0), "AMBIENTE").andExpect(status().isCreated())
+        // 1ª foto (modo manual ou início da caminhada): descrição completa, novidade true, com sugestão
+        Integer primeira = ler(descrever(token, foto(0), "AMBIENTE").andExpect(status().isCreated())
                 .andExpect(jsonPath("$.novidade").value(true))
                 .andExpect(jsonPath("$.sugestaoRelato.tipo").value("OBSTRUCAO_PERMANENTE")).andReturn(), "$.id");
 
-        // Mesma cena com anteriorId: sem novidade (o app não fala) e sem repetir a pergunta do relato
-        Integer repetida = ler(descrever(token, foto(0), "AMBIENTE", falada).andExpect(status().isCreated())
+        // Mesma cena: confirmação curta (também falada) e sem repetir a pergunta do relato
+        Integer segunda = ler(descrever(token, foto(0), "AMBIENTE", primeira).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.novidade").value(false))
-                .andExpect(jsonPath("$.descricaoCompleta").value("Poste no meio da calçada, a cerca de 3 metros. Calçada estreita."))
+                .andExpect(jsonPath("$.descricaoCompleta").value("Poste, muro e lixeira continuam no mesmo lugar, à sua frente."))
+                .andExpect(jsonPath("$.resumo").value("Poste no meio da calçada, a cerca de 3 metros. Calçada estreita."))
                 .andExpect(jsonPath("$.barreiraDetectada").value(true))
                 .andExpect(jsonPath("$.sugestaoRelato").isEmpty()).andReturn(), "$.id");
 
+        // O app encadeia a resposta anterior, mesmo sendo uma confirmação: o resumo guarda a cena inteira
+        Integer terceira = ler(descrever(token, foto(0), "AMBIENTE", segunda)
+                .andExpect(jsonPath("$.novidade").value(false)).andReturn(), "$.id");
+
         // Cena diferente: novidade
-        descrever(token, foto(1), "AMBIENTE", falada).andExpect(status().isCreated())
+        descrever(token, foto(1), "AMBIENTE", terceira).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.novidade").value(true));
 
         // novidade não é gravada: no histórico vem null
-        mvc.perform(get("/descricoes/" + repetida).header(auth(), bearer(token)))
+        mvc.perform(get("/descricoes/" + segunda).header(auth(), bearer(token)))
                 .andExpect(jsonPath("$.novidade").isEmpty());
     }
 

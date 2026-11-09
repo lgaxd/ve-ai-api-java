@@ -59,10 +59,15 @@ public class NotificacaoService {
     /**
      * Chamado pelo consumidor RabbitMQ. Destinatários:
      * relato.criado → gestores da região · relato.apoiado → autor · relato.status → autor e apoiadores.
+     *
+     * <p>O relato é travado (SELECT ... FOR UPDATE) antes de inserir as notificações, na mesma ordem da
+     * exclusão (trava o relato e apaga as notificações em cascata). Sem isso, um DELETE do autor no meio
+     * do consumo dava ORA-02291 ou, com mais de um destinatário, deadlock (ORA-00060) e HTTP 500 na exclusão.
+     * Agora um espera o outro: se a exclusão vence, o relato some e o evento é ignorado.
      */
     @Transactional
     public int gerar(EventoRelato evento) {
-        Relato relato = relatos.buscarCompleto(evento.relatoId()).orElse(null);
+        Relato relato = relatos.buscarParaAtualizar(evento.relatoId()).orElse(null);
         if (relato == null) {
             log.info("Relato {} não existe mais: evento {} ignorado", evento.relatoId(), evento.tipo());
             return 0;

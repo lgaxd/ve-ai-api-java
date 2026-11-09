@@ -15,15 +15,18 @@ public final class DescricaoDtos {
     private DescricaoDtos() {}
 
     @Schema(description = "Descrição gerada pela IA. O app fala a descricaoCompleta, que já começa pelos perigos (com posição e distância). "
-            + "No modo automático, o app só fala quando novidade = true. perigos, resumo e objetos são dados estruturados para alertas, histórico e listas.")
+            + "No modo automático, sem novidade ela é uma confirmação curta (\"O poste e o carro continuam no mesmo lugar, à sua frente.\"). "
+            + "perigos, resumo e objetos são dados estruturados para alertas, histórico e listas.")
     public record DescricaoResposta(
             Long id,
             ModoDescricao modo,
             List<Perigo> perigos,
             String resumo,
             String descricaoCompleta,
-            @Schema(description = "Só na resposta do POST. true = o app deve falar a descricaoCompleta. Sem anteriorId é sempre true; "
-                    + "com anteriorId, false quando a cena é a mesma que a pessoa acabou de ouvir. null no histórico (não é gravado).")
+            @Schema(description = "Só na resposta do POST. Sem anteriorId é sempre true. Com anteriorId: true = algo mudou "
+                    + "(a descricaoCompleta traz só a mudança); false = mesma cena (a descricaoCompleta é uma confirmação curta). "
+                    + "O app fala a descricaoCompleta nos dois casos e pode usar novidade para, por exemplo, tocar um aviso sonoro antes. "
+                    + "null no histórico (não é gravado).")
             Boolean novidade,
             List<String> objetos,
             boolean barreiraDetectada,

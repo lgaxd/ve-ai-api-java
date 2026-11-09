@@ -25,7 +25,7 @@
 
 **Na tela:** logo do Vê AI e o diagrama de três passos: caminhada → narração → relato à rede de apoio.
 
-> "O Vê AI é um assistente em português que acompanha a pessoa enquanto ela anda. Com o celular no peito, o app fotografa o caminho a cada poucos segundos e a inteligência artificial narra **só o que muda, começando pelos perigos**: um poste à frente, um degrau, uma bicicleta vindo. Quando nada muda, ele fica em silêncio, para não encobrir os sons da rua.
+> "O Vê AI é um assistente em português que acompanha a pessoa enquanto ela anda. Com o celular no peito, o app fotografa o caminho a cada poucos segundos e a inteligência artificial narra **o que muda, começando pelos perigos**: um poste à frente, um degrau, uma bicicleta vindo. Quando nada muda, ela só confirma em uma frase curta, como 'o poste continua no mesmo lugar', para a pessoa saber que o app está atento sem ter os sons da rua encobertos por uma descrição longa.
 > A qualquer momento, a pessoa também pode pedir uma descrição completa ou a leitura de um texto, como uma placa ou a caixa de um remédio.
 > Quando a IA reconhece uma barreira permanente, o app pergunta, uma vez só: 'Quer avisar a rede de apoio?'. O relato vai com a localização para o técnico da ONG ou do CRAS da região, que faz a triagem e encaminha à prefeitura.
 > Se outra pessoa relatar a mesma barreira, a menos de 30 metros, o relato ganha força em vez de se repetir."
@@ -35,13 +35,13 @@
 | Tempo | Ação | O que falar |
 |---|---|---|
 | 1:30 | Vídeo em primeira pessoa: a Ana liga o **modo automático** e começa a andar pela calçada. O celular narra: "Bem à sua frente, a cerca de 5 metros, há um poste no meio da calçada…" | "O app fotografa a cada poucos segundos e a primeira coisa que fala é o perigo, com a direção e a distância." |
-| 1:45 | Ela continua andando. Alguns segundos de silêncio e depois: "O poste está agora a menos de 1 metro, bem à sua frente." | "Ele não repete tudo a cada foto. A API compara a cena com o que a Ana acabou de ouvir e só fala o que mudou, como o poste chegando mais perto. Cada foto é respondida em cerca de 3 segundos." |
+| 1:45 | Ela continua andando. O celular confirma "O poste continua no mesmo lugar, à sua frente." e, logo depois, "O poste está agora a menos de 1 metro, bem à sua frente." | "Ele não repete a descrição inteira a cada foto. A API compara a cena com a anterior: quando nada muda, confirma em uma frase; quando algo muda, como o poste chegando mais perto, avisa. Cada foto é respondida em cerca de 3 segundos." |
 | 2:00 | O app pergunta "Parece haver calçada obstruída. Quer avisar a rede de apoio?" e a Ana confirma. | "A pergunta aparece uma vez só, mesmo com o poste em várias fotos seguidas. Quem decide que é uma barreira é a IA, com Spring AI e saída estruturada. Perigos momentâneos, como um carro ou uma bicicleta, nunca viram relato." |
 | 2:10 | Outro cidadão (Diego) relata o mesmo problema a poucos metros. A resposta é "APOIO_REGISTRADO". | "A API reconhece que é o mesmo problema e soma um apoio. A prioridade sobe." |
 | 2:25 | Troque para a **Marina**: a fila do gestor mostra o relato no topo. Ela muda para **EM_TRIAGEM** e depois para **ENCAMINHADO** com o protocolo SP156. | "A gestora só vê as regiões dela, ordenadas por prioridade. Cada mudança fica no histórico." |
 | 2:45 | Volte para a Ana: o app lê a notificação "Seu relato foi encaminhado ao órgão responsável. Protocolo…". | "A notificação é assíncrona: a mudança publica um evento no RabbitMQ e um consumidor grava o aviso para a Ana e para todos que apoiaram." |
 
-**Plano B se a internet falhar:** mostre a mesma sequência no Swagger (`/swagger-ui.html`) com o provedor de IA `falso`: envie uma foto, depois a mesma foto com `anteriorId` (a resposta vem com `novidade: false` e sem repetir a sugestão de relato).
+**Plano B se a internet falhar:** mostre a mesma sequência no Swagger (`/swagger-ui.html`) com o provedor de IA `falso`: envie uma foto, depois a mesma foto com `anteriorId` (a resposta vem com `novidade: false`, uma confirmação curta e sem repetir a sugestão de relato).
 
 ## 3:00 – 4:00 · Modelo de negócio
 

@@ -110,10 +110,12 @@ src/main/java/br/com/fiap/veai/
 - No modo TEXTO, o `textoLido` da IA é guardado em `descricaoCompleta`.
 - **Sugestão de relato:** quando `barreira.detectada = true` e `confianca ≥ veai.ia.confianca-minima` (padrão 0,7), a resposta traz `sugestaoRelato: {tipo, gravidade, pergunta}`. Perigos momentâneos nunca geram sugestão.
 - **Modo automático** (fotos a cada poucos segundos enquanto a pessoa anda):
-  - o app manda `anteriorId`, o id da **última descrição que falou**. A API envia ao modelo o texto dela ("DESCRIÇÃO ANTERIOR") e as regras de CONTINUIDADE do prompt;
-  - o modelo responde `novidade`. Com `true`, a `descricaoCompleta` traz só o que mudou (perigo novo, perigo bem mais perto, mudança de lugar). Com `false`, traz uma frase curta para o histórico, e o app não fala;
+  - o app manda `anteriorId`, o id da **resposta anterior**. A API envia ao modelo a "FOTO ANTERIOR": o que a pessoa ouviu, o `resumo` e os `perigos` dela, além das regras de CONTINUIDADE do prompt. O `resumo` e os `perigos` sempre descrevem a cena inteira, então o encadeamento funciona mesmo quando a resposta anterior foi só uma confirmação;
+  - o modelo responde `novidade`. Com `true`, a `descricaoCompleta` traz só o que mudou (perigo novo, perigo bem mais perto, mudança de lugar). Com `false`, é **uma frase curta de confirmação**, de até 100 caracteres ("O poste e o carro continuam no mesmo lugar, à sua frente.", "O poste e o carro estão um pouco mais perto, a cerca de 3 metros."). **O app fala as duas**: a pessoa sempre ouve um retorno, sem a descrição inteira se repetir. O app pode usar `novidade` para, por exemplo, tocar um aviso sonoro antes de uma mudança;
+  - a regra da frase curta vai também no pedido de cada foto, e não só no prompt de sistema: nos testes com o modelo real, só no prompt de sistema as confirmações saíam com 150 a 220 caracteres; com a regra no pedido, 70 a 100;
+  - distâncias em metros, e não em passos, porque o tamanho do passo varia de pessoa para pessoa;
   - rede de segurança na API: se antes não havia perigo e agora há, `novidade` é `true`, diga o modelo o que disser;
-  - a descrição anterior só vale no modo AMBIENTE e por até `veai.continuo.validade-contexto` (2 min). Depois disso, a cena é descrita inteira de novo (reorientação periódica);
+  - a resposta anterior só vale no modo AMBIENTE e por até `veai.continuo.validade-contexto` (2 min). Depois disso, como numa pausa longa, a cena é descrita inteira de novo;
   - a mesma sugestão de relato (mesmo tipo de barreira) não se repete por `veai.continuo.janela-sugestao` (2 min), para o app não interromper a caminhada a cada foto (`MemoriaSugestoes`, em memória como o rate limit). No modo manual, a sugestão sempre aparece;
   - `novidade` não é gravada (não há coluna no Oracle): vem só na resposta do POST e é `null` no histórico. Assim o schema do repositório `database` não muda;
   - sem `anteriorId` (modo manual, ou primeira foto da caminhada), tudo funciona como antes e `novidade` é sempre `true`. A escolha entre automático e manual fica só no app.
@@ -179,7 +181,7 @@ src/main/java/br/com/fiap/veai/
 | Limites de texto alinhados ao Oracle: `endereco` 200, `protocoloOrgao` 40, `motivoDescarte` 300 | **Lucca** (.NET) e **Pietro** (Mobile) |
 | `Regiao` com `latitude`/`longitude` e `regiaoId` opcional no `POST /relatos` | **Lucca** (.NET), **Pietro** (Mobile) e o repositório `database` (DDL, dataset e Mongo) |
 | Nova rota `POST /descricoes/{id}/pergunta` | **Lucca** e **Pietro** |
-| Modo automático: `anteriorId` opcional em `POST /descricoes`, campo `novidade` na resposta e sugestão de relato que não se repete por 2 min | **Lucca** (.NET) e **Pietro** (Mobile: loop sequencial de fotos, falar só com `novidade = true`, tratar 429/502 sem falar) |
+| Modo automático: `anteriorId` opcional em `POST /descricoes`, campo `novidade` na resposta (sem novidade, a `descricaoCompleta` é uma confirmação curta) e sugestão de relato que não se repete por 2 min | **Lucca** (.NET) e **Pietro** (Mobile: loop sequencial de fotos com o id da resposta anterior, falar sempre a `descricaoCompleta`, tratar 429/502 sem falar) |
 | Resposta do `POST /relatos` com `resultado` (`CRIADO`/`APOIO_REGISTRADO`/`JA_REGISTRADO`) | **Lucca** e **Pietro** |
 | `DELETE /relatos/{id}` bloqueado quando há apoios de terceiros (409) | **Lucca**, **Pietro** e Test Cases de QA |
 | Paginação no formato `PaginaResposta` | **Lucca** e **Pietro** |
@@ -190,6 +192,7 @@ src/main/java/br/com/fiap/veai/
 
 ## 14. Achados da implementação
 
+- **Deadlock entre a exclusão do relato e o consumidor RabbitMQ (ORA-00060):** o autor exclui um relato logo depois de criar e, ao mesmo tempo, o consumidor grava as notificações de `relato.criado`. O DELETE trava o relato e apaga as notificações em cascata (`ON DELETE CASCADE`). O consumidor, sem travar nada, inseria as notificações. Com uma notificação ainda não commitada, o DELETE esperava o consumidor, e a inserção seguinte (região com mais de um gestor) esperava o DELETE: deadlock, e a exclusão respondia 500. Com um único destinatário, o consumidor falhava com ORA-02291 e se recuperava na nova tentativa. Correção: o `NotificacaoService.gerar` trava o relato (`SELECT ... FOR UPDATE`) antes de inserir, na mesma ordem do DELETE. Um espera o outro; se a exclusão vence, o evento é ignorado. O teste `consumidorEsperaExclusaoDoRelato` força essa sobreposição e falhava antes da correção.
 - **Conflito de versões do Swagger:** o Spring AI 2.0.1 traz `swagger-annotations` 2.2.31/2.2.38, e o springdoc 3.2 precisa da 2.2.55. O `/v3/api-docs` falhava com `NoSuchMethodError`. As duas bibliotecas ficaram fixadas na 2.2.55 pelo `dependencyManagement` do `pom.xml`.
 - **Texto longo no SQL Server:** a coluna `corpo_resposta` usa `SqlTypes.LONG32NVARCHAR`, que vira `NCLOB` no Oracle e `NVARCHAR(MAX)` no SQL Server. Com `LONG32VARCHAR`, o `validate` do Hibernate recusava o SQL Server.
 - **Validação nos dois bancos:** as migrações foram testadas contra Oracle XE 21 (Testcontainers e Docker, num schema vazio e num schema onde o `00_instalar.sql` do repositório `database` já tinha rodado) e, com o `validate` do Hibernate, contra SQL Server 2022 em container, com o perfil `azure`. O SQL Server foi testado com seed, acentos, colunas JSON, idempotência e notificações.

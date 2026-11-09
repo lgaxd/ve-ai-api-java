@@ -7,7 +7,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,15 +20,71 @@ import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import br.com.fiap.veai.IntegracaoTest;
+import br.com.fiap.veai.mensageria.EventoRelato;
 import br.com.fiap.veai.mensageria.RabbitConfig;
+import br.com.fiap.veai.relato.RelatoRepository;
 
 /** Fluxo assíncrono de ponta a ponta: API → exchange veai.relatos → fila → @RabbitListener → NOTIFICACAO. */
 class NotificacaoIntegracaoTest extends IntegracaoTest {
 
     @Autowired
     RabbitAdmin rabbitAdmin;
+
+    @Autowired
+    NotificacaoService notificacoes;
+
+    @Autowired
+    RelatoRepository relatos;
+
+    @Autowired
+    PlatformTransactionManager transacoes;
+
+    @Test
+    @DisplayName("consumidor espera a exclusão em andamento do relato e ignora o evento (sem ORA-02291 nem deadlock)")
+    void consumidorEsperaExclusaoDoRelato() throws Exception {
+        String autor = novoCidadao();
+        String marina = login(MARINA);
+        MvcResult criado = mvc.perform(post("/relatos").header(auth(), bearer(autor)).contentType(MediaType.APPLICATION_JSON)
+                        .content(relatoJson("OUTRO", "BAIXA", pontoNovo(SE))))
+                .andExpect(status().isCreated()).andReturn();
+        long id = ((Integer) ler(criado, "$.relato.id")).longValue();
+        aguardar(() -> !mensagens(marina, (int) id).isEmpty()); // o consumidor real já terminou
+
+        // Exclusão do autor em andamento: relato travado e apagado, commit só daqui a 1 s
+        CountDownLatch apagado = new CountDownLatch(1);
+        CompletableFuture<Void> exclusao = CompletableFuture.runAsync(() ->
+                new TransactionTemplate(transacoes).executeWithoutResult(t -> {
+                    relatos.buscarParaAtualizar(id).ifPresent(relatos::delete);
+                    relatos.flush();
+                    apagado.countDown();
+                    esperar(1000);
+                }));
+        assertThat(apagado.await(10, TimeUnit.SECONDS)).isTrue();
+
+        // O evento chega no meio da exclusão. Antes da correção, o consumidor lia o relato (ainda visível),
+        // tentava inserir a notificação e falhava com ORA-02291, ou com ORA-00060 (deadlock) se houvesse
+        // mais de um destinatário. Agora ele espera o DELETE terminar e ignora o relato que não existe mais.
+        long inicio = System.nanoTime();
+        int criadas = notificacoes.gerar(EventoRelato.criado(id, 0L, Instant.now()));
+        Duration esperou = Duration.ofNanos(System.nanoTime() - inicio);
+        exclusao.get(10, TimeUnit.SECONDS);
+
+        assertThat(criadas).isZero();
+        assertThat(esperou).isGreaterThan(Duration.ofMillis(500));
+        assertThat(relatos.findById(id)).isEmpty();
+    }
+
+    private static void esperar(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
     @Test
     @DisplayName("criar, apoiar e mudar status notifica gestores, autor e apoiadores com mensagens para voz")

@@ -57,9 +57,10 @@ public class DescricaoService {
      * Fluxo principal: valida e reduz a foto, consome o rate limit, chama a IA, grava só o texto e diz se há
      * barreira para sugerir um relato. A chamada à IA fica fora de transação (não segura conexão do banco).
      *
-     * <p>Modo automático: o app manda em {@code anteriorId} a última descrição que falou. A IA compara a
-     * cena nova com ela e responde {@code novidade}; o app só fala quando é true. A mesma sugestão de
-     * relato também não se repete a cada foto. Sem {@code anteriorId} (modo manual), tudo é como antes.
+     * <p>Modo automático: o app manda em {@code anteriorId} o id da resposta anterior. A IA compara a cena
+     * nova com ela: com novidade, fala só o que mudou; sem novidade, confirma em uma frase curta (o app fala
+     * as duas). A mesma sugestão de relato também não se repete a cada foto. Sem {@code anteriorId}
+     * (modo manual), a descrição é completa, como antes.
      */
     public DescricaoResposta descrever(Long usuarioId, ModoDescricao modo, MultipartFile arquivo, Long anteriorId) {
         ImagemRecebida imagem = RedutorImagem.reduzir(ValidadorImagem.validar(arquivo), ladoMaximoFoto);
@@ -104,7 +105,8 @@ public class DescricaoService {
         if (idade.compareTo(validadeContexto) > 0) {
             return null;
         }
-        return new ContextoAnterior(anterior.getDescricaoCompleta(), Math.max(0, idade.toSeconds()));
+        return new ContextoAnterior(anterior.getDescricaoCompleta(), anterior.getResumo(), anterior.getPerigos(),
+                Math.max(0, idade.toSeconds()));
     }
 
     @Transactional(readOnly = true)

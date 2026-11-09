@@ -43,8 +43,9 @@ public class DescricaoController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Descreve a foto (perigos primeiro) e sugere relato se houver barreira",
             description = "Modo manual: envie só a foto. Modo automático (fotos a cada poucos segundos enquanto a pessoa anda): "
-                    + "envie também anteriorId, o id da última descrição que o app falou. A IA compara as cenas e responde "
-                    + "novidade; o app só fala quando novidade = true. A mesma sugestão de relato não se repete por 2 minutos. "
+                    + "envie também anteriorId, o id da resposta anterior. A IA compara as cenas: com novidade, a descricaoCompleta "
+                    + "traz só o que mudou; sem novidade, é uma confirmação curta. O app fala as duas. "
+                    + "A mesma sugestão de relato não se repete por 2 minutos. "
                     + "Uma descrição anterior com mais de 2 minutos é ignorada (a cena é descrita inteira de novo).",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Descrição criada"),
@@ -55,7 +56,7 @@ public class DescricaoController {
     public DescricaoResposta descrever(UsuarioLogado logado,
                                        @RequestPart("imagem") MultipartFile imagem,
                                        @RequestParam(defaultValue = "AMBIENTE") ModoDescricao modo,
-                                       @Parameter(description = "Modo automático: id da última descrição falada pelo app")
+                                       @Parameter(description = "Modo automático: id da resposta anterior (a da foto anterior da caminhada)")
                                        @RequestParam(required = false) Long anteriorId) {
         return service.descrever(logado.id(), modo, imagem, anteriorId);
     }

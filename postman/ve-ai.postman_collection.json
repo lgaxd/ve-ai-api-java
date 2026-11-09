@@ -704,8 +704,8 @@
                   "  const anterior = pm.collectionVariables.get(\"sugestaoTipo\");",
                   "  if (anterior && r.sugestaoRelato) pm.expect(r.sugestaoRelato.tipo).to.not.eql(anterior);",
                   "});",
-                  "pm.test(\"Sem novidade, o texto do histórico é curto\", () => {",
-                  "  if (r.novidade === false) pm.expect(r.descricaoCompleta.length).to.be.at.most(200);",
+                  "pm.test(\"Sem novidade, a confirmação falada é curta\", () => {",
+                  "  if (r.novidade === false) pm.expect(r.descricaoCompleta.length).to.be.at.most(160);",
                   "});"
                 ]
               }
@@ -725,7 +725,7 @@
                 }
               ]
             },
-            "description": "Modo automático: o app manda em anteriorId o id da última descrição que falou. A IA compara as cenas e responde novidade; o app só fala quando novidade = true. A mesma sugestão de relato não se repete por 2 minutos. Aqui a foto é a mesma da requisição anterior (pessoa parada).",
+            "description": "Modo automático: o app manda em anteriorId o id da resposta anterior. A IA compara as cenas: com novidade, a descricaoCompleta traz só o que mudou; sem novidade, é uma confirmação curta. O app fala as duas. A mesma sugestão de relato não se repete por 2 minutos. Aqui a foto é a mesma da requisição anterior (pessoa parada).",
             "body": {
               "mode": "formdata",
               "formdata": [
