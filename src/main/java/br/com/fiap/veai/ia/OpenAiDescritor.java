@@ -28,10 +28,12 @@ public class OpenAiDescritor implements DescritorImagem {
     private static final Logger log = LoggerFactory.getLogger(OpenAiDescritor.class);
 
     private static final String PEDIDO_AMBIENTE =
-            "Descreva o ambiente desta foto para uma pessoa com deficiência visual. Comece pelos perigos.";
+            "Esta foto foi tirada automaticamente, na altura do peito, na direção em que a pessoa anda. "
+                    + "Descreva o que está à frente dela seguindo as regras. A descricaoCompleta é o texto falado: comece pelos perigos.";
     private static final String PEDIDO_TEXTO =
             "Leia o texto desta foto exatamente como está escrito e coloque-o em textoLido. "
-                    + "Em resumo, diga em uma frase do que se trata. Também informe perigos visíveis, se houver.";
+                    + "Em resumo, diga em uma frase do que se trata (placa, cardápio, embalagem, documento...). "
+                    + "Também informe perigos visíveis, se houver.";
 
     private final ChatClient chatClient;
 
@@ -53,7 +55,7 @@ public class OpenAiDescritor implements DescritorImagem {
             }
             return resposta.normalizada();
         } catch (RuntimeException e) {
-            log.warn("Falha ao descrever imagem ({}): {}", imagem, e.getMessage());
+            log.warn("Falha ao descrever imagem ({}): {}", imagem, e.toString());
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "Não consegui descrever a foto agora. Tente de novo em alguns segundos.");
         }
@@ -63,12 +65,14 @@ public class OpenAiDescritor implements DescritorImagem {
     public String responder(ImagemRecebida imagem, String pergunta) {
         try {
             return chatClient.prompt()
-                    .user(u -> u.text("Responda em até duas frases, sem inventar nada que não esteja na foto: " + pergunta)
+                    .user(u -> u.text("Responda em texto corrido, em até duas frases, sem inventar nada que não esteja na foto. "
+                            + "Dê posições a partir de quem segura o celular (à sua frente, à sua direita) e distâncias "
+                            + "aproximadas em metros, por extenso. Pergunta: " + pergunta)
                             .media(imagem.tipo(), new ByteArrayResource(imagem.bytes())))
                     .call()
                     .content();
         } catch (RuntimeException e) {
-            log.warn("Falha na pergunta livre ({}): {}", imagem, e.getMessage());
+            log.warn("Falha na pergunta livre ({}): {}", imagem, e.toString());
             throw new ApiException(HttpStatus.BAD_GATEWAY, "Não consegui responder agora. Tente de novo.");
         }
     }

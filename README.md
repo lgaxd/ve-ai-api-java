@@ -18,6 +18,7 @@ Esta é a API consumida pelo app mobile (React Native). O mesmo contrato também
 | Deploy da API (Swagger) | `___` |
 | Vídeo pitch | `___` |
 | Contrato OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
+| Coleção Postman | [postman/](postman) (60 requisições com testes automáticos) |
 | Decisões de arquitetura | [docs/decisoes-arquitetura.md](docs/decisoes-arquitetura.md) |
 
 ---
@@ -58,9 +59,33 @@ API ──(depois do commit)──▶ exchange veai.relatos (topic)
 
 ## 2. Como rodar
 
-**Pré-requisitos:** Java 21, Maven 3.9+ (ou o `./mvnw` incluído) e, para o banco local e os testes, Docker com o plugin Compose.
+A avaliação usa a API **na nuvem** (link no topo). Para testar na própria máquina, há duas opções:
 
-A API usa **Oracle**, com o mesmo schema do repositório `database` (tabelas, funções, procedures, gatilhos e pacotes). Há duas opções de banco:
+### Opção A · Tudo com Docker (só precisa de Docker)
+
+API Java, Oracle XE 21 e RabbitMQ sobem juntos, sem instalar Java nem Maven:
+
+```bash
+# Coloque na raiz do projeto o .env fornecido pela equipe (ou: cp .env.example .env)
+docker compose up -d --build   # 1ª vez: baixa as imagens (~1,5 GB) e compila a API; leva alguns minutos
+docker compose ps              # aguarde api, oracle e rabbitmq ficarem "healthy" (1 a 3 min)
+```
+
+- **Swagger:** http://localhost:8080/swagger-ui.html. Faça login em `POST /auth/login` com `ana.souza@veai.dev` / `Veai@2026` e use o token no botão **Authorize**.
+- **Saúde:** http://localhost:8080/health
+- **RabbitMQ:** http://localhost:15672 (`veai`/`veai`)
+- **Oracle:** `localhost:1521`, serviço `XEPDB1`, usuário `veai`, senha `veai` (SQL Developer)
+- **Parar:** `docker compose down`. Para apagar também os dados: `docker compose down -v`.
+
+Dentro do compose, a API usa **sempre** o Oracle e o RabbitMQ dos containers, mesmo que o `.env` aponte para a FIAP. Do `.env` ela usa só a chave da OpenAI (`VEAI_IA_PROVEDOR=openai` + `OPENAI_API_KEY`), o `JWT_SECRET` e os opcionais. Sem `.env`, tudo sobe do mesmo jeito, com a IA no modo `falso` (respostas fixas, sem custo).
+
+Se alguma porta estiver ocupada, defina no `.env`, por exemplo: `API_PORT=18080`, `ORACLE_PORT=11521`, `RABBITMQ_PORT=15673` e `RABBITMQ_PAINEL_PORT=15674`.
+
+> A imagem do Oracle XE só existe para `linux/amd64`. Em Mac com Apple Silicon ela roda emulada, mais devagar.
+
+### Opção B · Desenvolvimento (Java 21 + Maven)
+
+A API roda pela IDE ou pelo Maven, e o Docker sobe só a infraestrutura. Há duas opções de banco:
 
 | Opção | Perfil | Quando usar |
 |---|---|---|
@@ -72,12 +97,10 @@ A API usa **Oracle**, com o mesmo schema do repositório `database` (tabelas, fu
 cp .env.example .env
 #    edite: SPRING_PROFILES_ACTIVE, DB_USER/DB_PASSWORD (FIAP), JWT_SECRET, OPENAI_API_KEY...
 
-# 1a. Banco local: Oracle XE 21 + RabbitMQ 4 (a 1ª subida baixa ~1 GB; aguarde "healthy")
-docker compose up -d
-docker compose ps
+# 1a. Banco local: só Oracle + RabbitMQ (sem o container da API)
+docker compose up -d oracle rabbitmq
 
 # 1b. ...ou banco da FIAP: no .env, SPRING_PROFILES_ACTIVE=fiap e as suas credenciais.
-#     O RabbitMQ continua vindo do docker compose (ou do CloudAMQP, via RABBITMQ_URL).
 docker compose up -d rabbitmq
 
 # 2. API: o Flyway cria (ou completa) o schema e carrega o seed de demonstração
@@ -85,8 +108,6 @@ docker compose up -d rabbitmq
 
 # 3. Swagger: http://localhost:8080/swagger-ui.html
 ```
-
-O Oracle local fica em `localhost:1521`, serviço `XEPDB1`, usuário `veai`, senha `veai` (para abrir no SQL Developer). O painel do RabbitMQ fica em http://localhost:15672 (`veai`/`veai`). `docker compose down -v` apaga os dados.
 
 Por padrão a IA roda no modo **`falso`**, com respostas fixas e sem custo. Para usar o modelo real, defina no `.env`:
 
@@ -174,6 +195,30 @@ Todas as rotas, exceto `/auth/**`, `/health` e o Swagger, exigem `Authorization:
 - **Status:** `ABERTO → EM_TRIAGEM → ENCAMINHADO → RESOLVIDO`, sem pular etapa e sem voltar. `DESCARTADO` pode vir de qualquer status não final e exige motivo. `ENCAMINHADO` exige o protocolo do órgão. Transição inválida responde **422**.
 - **Deduplicação:** um relato **não finalizado**, do **mesmo tipo** e a **até 30 m** (Haversine) recebe +1 apoio em vez de virar um relato novo.
 - **Privacidade:** a foto nunca é gravada (nem em banco, nem em disco, nem em log) e o GPS só é guardado no relato.
+
+### Coleção Postman
+
+A pasta [postman/](postman) tem a coleção `ve-ai.postman_collection.json`, com **60 requisições e 129 testes automáticos**, os ambientes `local` e `nuvem` e as duas fotos usadas nas descrições.
+
+| Pasta | O que cobre |
+|---|---|
+| 00 · Saúde | `/health` público |
+| 01 · Autenticação | login dos 4 usuários do seed, cadastro de cidadão, e-mail repetido (409), validação (400), senha errada e rota sem token (401) |
+| 02 · Usuário e regiões | perfil, regiões da gestora, preferências de voz (e limite inválido) |
+| 03 · Descrições (IA) | foto da calçada (AMBIENTE), placa (TEXTO), histórico paginado, avaliação, pergunta livre, exclusão, 400/403/404 |
+| 04 · Relatos | regra dos 30 m (CRIADO, APOIO_REGISTRADO, JA_REGISTRADO), `Idempotency-Key` (repetição e conflito), edição, exclusão (409 com apoios) |
+| 05 · Gestor | fila por prioridade e filtros, gestor de outra região (403), máquina de estados com protocolo, transições inválidas (422) e histórico |
+| 06 · Notificações | avisos gerados pelo consumidor RabbitMQ para autor, apoiador e gestora; marcar como lida |
+
+**No Postman:** importe a coleção e um dos ambientes e rode a coleção inteira, na ordem (*Run collection*). Cada pasta usa os tokens e os relatos criados nas anteriores. Se o Postman não achar as fotos, selecione os arquivos da pasta `postman/` no campo `imagem` das requisições de descrição, ou configure essa pasta como *Working Directory* em *Settings → General*.
+
+**Pela linha de comando** (com Node.js):
+
+```bash
+npx newman run postman/ve-ai.postman_collection.json -e postman/ve-ai-local.postman_environment.json --working-dir postman
+```
+
+A coleção pode ser executada várias vezes seguidas: cada execução cria um cidadão novo e relatos em pontos aleatórios. Ela funciona com a IA real e no modo `falso`.
 
 ### Exemplo rápido (curl)
 

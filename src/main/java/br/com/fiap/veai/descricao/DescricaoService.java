@@ -72,7 +72,7 @@ public class DescricaoService {
 
     @Transactional(readOnly = true)
     public PaginaResposta<DescricaoResposta> listar(Long usuarioId, Integer page, Integer size) {
-        var pagina = repository.findByUsuarioId(usuarioId, Paginacao.de(page, size, Sort.by(Sort.Direction.DESC, "criadoEm")));
+        var pagina = repository.findByUsuarioId(usuarioId, Paginacao.de(page, size, Sort.by(Sort.Direction.DESC, "criadoEm", "id")));
         return PaginaResposta.de(pagina, d -> DescricaoResposta.de(d, null));
     }
 

@@ -1,27 +1,68 @@
-# Vê AI · ambiente local (perfil "local"): Oracle XE + RabbitMQ
-# Alternativa ao Oracle da FIAP para desenvolver e testar sem depender da rede da faculdade.
+# =============================================================================
+# Vê AI · ambiente local completo: API Java + Oracle XE + RabbitMQ
 #
-#   docker compose up -d        # a 1ª subida baixa as imagens; aguarde "healthy" em: docker compose ps
-#   ./mvnw spring-boot:run      # o Flyway cria tabelas, PL/SQL e seed no 1º start da API
-#   docker compose down         # para (os dados ficam no volume; "down -v" apaga tudo)
+# Tudo junto (avaliação local):
+#   cp .env.example .env         # ou use o .env fornecido pela equipe
+#   docker compose up -d --build # 1ª vez: baixa as imagens e compila a API (alguns minutos)
+#   docker compose ps            # aguarde os 3 serviços ficarem "healthy"
+#   Swagger: http://localhost:8080/swagger-ui.html  (ana.souza@veai.dev / Veai@2026)
+#
+# Só a infraestrutura (para rodar a API pela IDE ou com ./mvnw spring-boot:run):
+#   docker compose up -d oracle rabbitmq
+#
+# Parar: docker compose down     (os dados ficam no volume; "down -v" apaga tudo)
 #
 # Oracle:   localhost:1521, serviço XEPDB1, usuário veai / senha veai
-#           (SQL Developer: Host localhost · Porta 1521 · Nome do serviço XEPDB1)
 # RabbitMQ: painel em http://localhost:15672 (veai / veai)
-# Credenciais fixas de propósito: este banco é só de desenvolvimento, na sua máquina.
+# Credenciais fixas de propósito: estes containers são só para rodar na sua máquina.
+# Portas ocupadas? Mude no .env: API_PORT, ORACLE_PORT, RABBITMQ_PORT, RABBITMQ_PAINEL_PORT.
+# =============================================================================
 name: ve-ai
 
 services:
+  api:
+    build: .
+    image: ve-ai-api-java:local
+    depends_on:
+      oracle:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    # Do .env vêm a chave da OpenAI, o provedor de IA, o JWT_SECRET e os opcionais.
+    env_file:
+      - path: .env
+        required: false
+    # Estes valores têm prioridade sobre o .env: dentro do compose a API usa SEMPRE
+    # o Oracle e o RabbitMQ destes containers, mesmo que o .env aponte para a FIAP.
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      LOCAL_DB_URL: jdbc:oracle:thin:@//oracle:1521/XEPDB1
+      LOCAL_DB_USER: veai
+      LOCAL_DB_PASSWORD: veai
+      DB_TIME_ZONE: UTC              # o Oracle do container roda em UTC
+      RABBITMQ_URL: amqp://veai:veai@rabbitmq:5672
+      PORT: "8080"
+    ports:
+      - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8080' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    restart: on-failure
+
   oracle:
     # XE 21 é a versão gratuita mais próxima do Oracle 19c da FIAP (sem tipo BOOLEAN nativo,
-    # então o Hibernate grava os booleanos em NUMBER(1), igual ao DDL do repositório database)
+    # então o Hibernate grava os booleanos em NUMBER(1), igual ao DDL do repositório database).
+    # Só existe para linux/amd64: em Mac com Apple Silicon roda emulado (Rosetta), mais devagar.
     image: gvenzl/oracle-xe:21-slim-faststart
     environment:
       ORACLE_PASSWORD: veai          # senha de SYS/SYSTEM
       APP_USER: veai                 # schema da aplicação, criado em XEPDB1
       APP_USER_PASSWORD: veai
     ports:
-      - "1521:1521"
+      - "${ORACLE_PORT:-1521}:1521"
     volumes:
       - oracle-dados:/opt/oracle/oradata
     healthcheck:
@@ -37,8 +78,8 @@ services:
       RABBITMQ_DEFAULT_USER: veai
       RABBITMQ_DEFAULT_PASS: veai
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_PAINEL_PORT:-15672}:15672"
     volumes:
       - rabbitmq-dados:/var/lib/rabbitmq
     healthcheck:

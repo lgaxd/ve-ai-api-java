@@ -14,7 +14,7 @@ public final class DescricaoDtos {
 
     private DescricaoDtos() {}
 
-    @Schema(description = "Descrição gerada pela IA. O app fala primeiro os perigos, depois o resumo.")
+    @Schema(description = "Descrição gerada pela IA. O app fala a descricaoCompleta, que já começa pelos perigos (com posição e distância). perigos, resumo e objetos são dados estruturados para alertas, histórico e listas.")
     public record DescricaoResposta(
             Long id,
             ModoDescricao modo,

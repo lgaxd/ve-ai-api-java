@@ -1,0 +1,4 @@
+# Só o pom.xml e o src entram na imagem. Segredos (.env) nunca.
+*
+!pom.xml
+!src/

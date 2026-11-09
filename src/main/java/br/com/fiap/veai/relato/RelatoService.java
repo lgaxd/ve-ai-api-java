@@ -97,7 +97,7 @@ public class RelatoService {
 
     @Transactional(readOnly = true)
     public PaginaResposta<RelatoResposta> meus(Long usuarioId, Integer page, Integer size) {
-        var pagina = relatos.findByCidadaoId(usuarioId, Paginacao.de(page, size, Sort.by(Sort.Direction.DESC, "criadoEm")));
+        var pagina = relatos.findByCidadaoId(usuarioId, Paginacao.de(page, size, Sort.by(Sort.Direction.DESC, "criadoEm", "id")));
         return PaginaResposta.de(pagina, RelatoResposta::de);
     }
 

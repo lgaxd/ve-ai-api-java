@@ -28,7 +28,8 @@ import org.springframework.context.ApplicationEventPublisher;
 @Service
 public class GestorRelatoService {
 
-    private static final Sort FILA = Sort.by(Sort.Order.desc("prioridade"), Sort.Order.asc("criadoEm"));
+    // O id desempata: no Oracle as datas são DATE (precisão de segundos), então empates são comuns
+    private static final Sort FILA = Sort.by(Sort.Order.desc("prioridade"), Sort.Order.asc("criadoEm"), Sort.Order.asc("id"));
 
     private final RelatoRepository relatos;
     private final AtualizacaoRelatoRepository atualizacoes;
