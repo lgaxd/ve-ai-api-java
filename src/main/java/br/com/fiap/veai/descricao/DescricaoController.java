@@ -22,6 +22,7 @@ import br.com.fiap.veai.descricao.DescricaoDtos.AvaliacaoRequest;
 import br.com.fiap.veai.descricao.DescricaoDtos.DescricaoResposta;
 import br.com.fiap.veai.descricao.DescricaoDtos.PerguntaResposta;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -41,15 +42,23 @@ public class DescricaoController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Descreve a foto (perigos primeiro) e sugere relato se houver barreira",
+            description = "Modo manual: envie só a foto. Modo automático (fotos a cada poucos segundos enquanto a pessoa anda): "
+                    + "envie também anteriorId, o id da resposta anterior. A IA compara as cenas: com novidade, a descricaoCompleta "
+                    + "traz só o que mudou; sem novidade, é uma confirmação curta. O app fala as duas. "
+                    + "A mesma sugestão de relato não se repete por 2 minutos. "
+                    + "Uma descrição anterior com mais de 2 minutos é ignorada (a cena é descrita inteira de novo).",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Descrição criada"),
+                    @ApiResponse(responseCode = "404", description = "anteriorId não existe ou é de outra pessoa"),
                     @ApiResponse(responseCode = "413", description = "Foto acima de 5 MB"),
                     @ApiResponse(responseCode = "415", description = "Formato diferente de JPEG, PNG ou WebP"),
                     @ApiResponse(responseCode = "429", description = "Limite de fotos por minuto (header Retry-After)")})
     public DescricaoResposta descrever(UsuarioLogado logado,
                                        @RequestPart("imagem") MultipartFile imagem,
-                                       @RequestParam(defaultValue = "AMBIENTE") ModoDescricao modo) {
-        return service.descrever(logado.id(), modo, imagem);
+                                       @RequestParam(defaultValue = "AMBIENTE") ModoDescricao modo,
+                                       @Parameter(description = "Modo automático: id da resposta anterior (a da foto anterior da caminhada)")
+                                       @RequestParam(required = false) Long anteriorId) {
+        return service.descrever(logado.id(), modo, imagem, anteriorId);
     }
 
     @GetMapping

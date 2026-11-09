@@ -3,6 +3,7 @@ package br.com.fiap.veai.ia;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,8 +29,14 @@ public class OpenAiDescritor implements DescritorImagem {
     private static final Logger log = LoggerFactory.getLogger(OpenAiDescritor.class);
 
     private static final String PEDIDO_AMBIENTE =
-            "Esta foto foi tirada automaticamente, na altura do peito, na direção em que a pessoa anda. "
+            "Esta foto foi tirada na altura do peito, na direção em que a pessoa anda. "
                     + "Descreva o que está à frente dela seguindo as regras. A descricaoCompleta é o texto falado: comece pelos perigos.";
+    private static final String SEM_CONTEXTO =
+            " Não há FOTO ANTERIOR: use \"novidade\": true e descreva a cena inteira.";
+    private static final String CONFIRMACAO =
+            "Se a cena for a mesma (novidade false), a descricaoCompleta é UMA frase só, de até 100 caracteres, "
+                    + "sem descrever o lugar de novo. Ex.: \"O carro e o poste continuam no mesmo lugar, à sua frente.\" "
+                    + "ou \"O carro e o poste estão um pouco mais perto, a cerca de 2 metros.\"";
     private static final String PEDIDO_TEXTO =
             "Leia o texto desta foto exatamente como está escrito e coloque-o em textoLido. "
                     + "Em resumo, diga em uma frase do que se trata (placa, cardápio, embalagem, documento...). "
@@ -43,8 +50,8 @@ public class OpenAiDescritor implements DescritorImagem {
     }
 
     @Override
-    public DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo) {
-        String pedido = modo == ModoDescricao.TEXTO ? PEDIDO_TEXTO : PEDIDO_AMBIENTE;
+    public DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo, ContextoAnterior anterior) {
+        String pedido = pedido(modo, anterior);
         try {
             DescricaoIA resposta = chatClient.prompt()
                     .user(u -> u.text(pedido).media(imagem.tipo(), new ByteArrayResource(imagem.bytes())))
@@ -59,6 +66,29 @@ public class OpenAiDescritor implements DescritorImagem {
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "Não consegui descrever a foto agora. Tente de novo em alguns segundos.");
         }
+    }
+
+    static String pedido(ModoDescricao modo, ContextoAnterior anterior) {
+        if (modo == ModoDescricao.TEXTO) {
+            return PEDIDO_TEXTO;
+        }
+        if (anterior == null) {
+            return PEDIDO_AMBIENTE + SEM_CONTEXTO;
+        }
+        String perigos = anterior.perigos().isEmpty() ? "nenhum"
+                : anterior.perigos().stream()
+                        .map(p -> limpar(p.descricao()) + " (" + limpar(p.direcao()) + ", " + limpar(p.distanciaAprox()) + ")")
+                        .collect(Collectors.joining("; "));
+        return PEDIDO_AMBIENTE + "\n\nModo automático. FOTO ANTERIOR (há " + anterior.segundosAtras() + " segundos):\n"
+                + "- O que a pessoa ouviu: \"" + limpar(anterior.descricaoCompleta()) + "\"\n"
+                + "- Cena: \"" + limpar(anterior.resumo()) + "\"\n"
+                + "- Perigos: " + perigos + "\n"
+                + "Esta é a foto seguinte da caminhada. Siga as regras de CONTINUIDADE. " + CONFIRMACAO;
+    }
+
+    /** Chaves e aspas saem do texto: chaves são marcadores de template no Spring AI. */
+    private static String limpar(String texto) {
+        return texto == null ? "" : texto.replaceAll("[{}\"]", "");
     }
 
     @Override

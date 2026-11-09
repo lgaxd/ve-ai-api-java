@@ -97,8 +97,28 @@ src/main/java/br/com/fiap/veai/
   - `falso` (padrão): devolve respostas fixas e verossímeis, sem gastar créditos.
 - O schema da seção 5.1 é usado desde já. Se o prompt do Pedro chegar, muda só o texto do prompt.
 - **Imagem:** aceita JPEG, PNG e WebP de até 5 MB. Fora disso, responde 413/415. A imagem fica só na memória durante a chamada e **nunca é gravada**, nem em log.
+- **Redução da foto** (`RedutorImagem`): JPEG e PNG maiores que `veai.ia.lado-maximo-foto` (1024 px) são reduzidos em memória antes de ir para o modelo, aplicando a rotação do EXIF (fotos de celular em pé vêm "deitadas" com a tag Orientation). WebP e arquivos que o Java não decodifica seguem como vieram.
+- **Latência medida** com o gpt-6-luna e uma foto de calçada:
+
+  | Configuração | Tempo da IA | Tokens de entrada |
+  |---|---|---|
+  | Foto de 4032 px, raciocínio padrão do modelo | ~18 s | 16.550 |
+  | Foto de 1024 px, `reasoning-effort: low` | 7 a 10 s | 3.107 |
+  | Foto de 1024 px, `reasoning-effort: none` (padrão) | 2 a 4 s | 3.107 |
+
+  O padrão é `none` (`OPENAI_REASONING_EFFORT`). No modo automático, a demora também é risco: com 8 s de atraso, a pessoa já andou cerca de 10 m quando ouve o aviso. Nos testes de caminhada, o `none` também acertou melhor quando a cena não tinha mudado. O `low` repetia avisos porque a distância estimada variava entre duas fotos iguais.
 - No modo TEXTO, o `textoLido` da IA é guardado em `descricaoCompleta`.
 - **Sugestão de relato:** quando `barreira.detectada = true` e `confianca ≥ veai.ia.confianca-minima` (padrão 0,7), a resposta traz `sugestaoRelato: {tipo, gravidade, pergunta}`. Perigos momentâneos nunca geram sugestão.
+- **Modo automático** (fotos a cada poucos segundos enquanto a pessoa anda):
+  - o app manda `anteriorId`, o id da **resposta anterior**. A API envia ao modelo a "FOTO ANTERIOR": o que a pessoa ouviu, o `resumo` e os `perigos` dela, além das regras de CONTINUIDADE do prompt. O `resumo` e os `perigos` sempre descrevem a cena inteira, então o encadeamento funciona mesmo quando a resposta anterior foi só uma confirmação;
+  - o modelo responde `novidade`. Com `true`, a `descricaoCompleta` traz só o que mudou (perigo novo, perigo bem mais perto, mudança de lugar). Com `false`, é **uma frase curta de confirmação**, de até 100 caracteres ("O poste e o carro continuam no mesmo lugar, à sua frente.", "O poste e o carro estão um pouco mais perto, a cerca de 3 metros."). **O app fala as duas**: a pessoa sempre ouve um retorno, sem a descrição inteira se repetir. O app pode usar `novidade` para, por exemplo, tocar um aviso sonoro antes de uma mudança;
+  - a regra da frase curta vai também no pedido de cada foto, e não só no prompt de sistema: nos testes com o modelo real, só no prompt de sistema as confirmações saíam com 150 a 220 caracteres; com a regra no pedido, 70 a 100;
+  - distâncias em metros, e não em passos, porque o tamanho do passo varia de pessoa para pessoa;
+  - rede de segurança na API: se antes não havia perigo e agora há, `novidade` é `true`, diga o modelo o que disser;
+  - a resposta anterior só vale no modo AMBIENTE e por até `veai.continuo.validade-contexto` (2 min). Depois disso, como numa pausa longa, a cena é descrita inteira de novo;
+  - a mesma sugestão de relato (mesmo tipo de barreira) não se repete por `veai.continuo.janela-sugestao` (2 min), para o app não interromper a caminhada a cada foto (`MemoriaSugestoes`, em memória como o rate limit). No modo manual, a sugestão sempre aparece;
+  - `novidade` não é gravada (não há coluna no Oracle): vem só na resposta do POST e é `null` no histórico. Assim o schema do repositório `database` não muda;
+  - sem `anteriorId` (modo manual, ou primeira foto da caminhada), tudo funciona como antes e `novidade` é sempre `true`. A escolha entre automático e manual fica só no app.
 - **Pergunta livre:** `POST /descricoes/{id}/pergunta`, em multipart com `imagem` (o app reenvia a última foto) e `pergunta`, devolve `{resposta}`. Nada é gravado. A rota exige `perguntaLivreAtiva = true` e conta no rate limit.
 - **Rate limit:** janela fixa em memória, com **20 requisições por minuto por usuário** em `POST /descricoes` e na pergunta livre. Acima disso, responde **429** com `Retry-After`. O motivo é controlar o custo da OpenAI e manter o mesmo contrato da versão .NET.
 
@@ -148,8 +168,8 @@ src/main/java/br/com/fiap/veai/
 
 ## 11. Testes
 
-- **Unitários**, sem container: fórmula de prioridade, Haversine, máquina de estados, escolha da região mais próxima e regra de sugestão de relato.
-- **Integração** com Testcontainers (`@ServiceConnection`, usando Oracle XE 21 e RabbitMQ reais): login, 401/403, gestor fora da região, CRUD de relatos, deduplicação e apoio, idempotência, transições de status, notificações consumidas da fila e 429.
+- **Unitários**, sem container: fórmula de prioridade, Haversine, máquina de estados, escolha da região mais próxima, regra de sugestão de relato, sugestão repetida no modo automático, validade do contexto, redução e rotação EXIF da foto.
+- **Integração** com Testcontainers (`@ServiceConnection`, usando Oracle XE 21 e RabbitMQ reais): login, 401/403, gestor fora da região, CRUD de relatos, deduplicação e apoio, idempotência, transições de status, notificações consumidas da fila, 429 e modo automático (`anteriorId`, `novidade`, sugestão sem repetir, 404 para `anteriorId` alheio).
 - O Maven roda **dentro do WSL** (`wsl mvn verify`), onde está o socket do Docker. O mesmo `mvn verify` roda no CI do Azure DevOps, cujo agente Ubuntu tem Docker.
 
 ## 12. Mudanças em relação ao escopo e quem precisa saber
@@ -161,6 +181,7 @@ src/main/java/br/com/fiap/veai/
 | Limites de texto alinhados ao Oracle: `endereco` 200, `protocoloOrgao` 40, `motivoDescarte` 300 | **Lucca** (.NET) e **Pietro** (Mobile) |
 | `Regiao` com `latitude`/`longitude` e `regiaoId` opcional no `POST /relatos` | **Lucca** (.NET), **Pietro** (Mobile) e o repositório `database` (DDL, dataset e Mongo) |
 | Nova rota `POST /descricoes/{id}/pergunta` | **Lucca** e **Pietro** |
+| Modo automático: `anteriorId` opcional em `POST /descricoes`, campo `novidade` na resposta (sem novidade, a `descricaoCompleta` é uma confirmação curta) e sugestão de relato que não se repete por 2 min | **Lucca** (.NET) e **Pietro** (Mobile: loop sequencial de fotos com o id da resposta anterior, falar sempre a `descricaoCompleta`, tratar 429/502 sem falar) |
 | Resposta do `POST /relatos` com `resultado` (`CRIADO`/`APOIO_REGISTRADO`/`JA_REGISTRADO`) | **Lucca** e **Pietro** |
 | `DELETE /relatos/{id}` bloqueado quando há apoios de terceiros (409) | **Lucca**, **Pietro** e Test Cases de QA |
 | Paginação no formato `PaginaResposta` | **Lucca** e **Pietro** |
@@ -171,6 +192,7 @@ src/main/java/br/com/fiap/veai/
 
 ## 14. Achados da implementação
 
+- **Deadlock entre a exclusão do relato e o consumidor RabbitMQ (ORA-00060):** o autor exclui um relato logo depois de criar e, ao mesmo tempo, o consumidor grava as notificações de `relato.criado`. O DELETE trava o relato e apaga as notificações em cascata (`ON DELETE CASCADE`). O consumidor, sem travar nada, inseria as notificações. Com uma notificação ainda não commitada, o DELETE esperava o consumidor, e a inserção seguinte (região com mais de um gestor) esperava o DELETE: deadlock, e a exclusão respondia 500. Com um único destinatário, o consumidor falhava com ORA-02291 e se recuperava na nova tentativa. Correção: o `NotificacaoService.gerar` trava o relato (`SELECT ... FOR UPDATE`) antes de inserir, na mesma ordem do DELETE. Um espera o outro; se a exclusão vence, o evento é ignorado. O teste `consumidorEsperaExclusaoDoRelato` força essa sobreposição e falhava antes da correção.
 - **Conflito de versões do Swagger:** o Spring AI 2.0.1 traz `swagger-annotations` 2.2.31/2.2.38, e o springdoc 3.2 precisa da 2.2.55. O `/v3/api-docs` falhava com `NoSuchMethodError`. As duas bibliotecas ficaram fixadas na 2.2.55 pelo `dependencyManagement` do `pom.xml`.
 - **Texto longo no SQL Server:** a coluna `corpo_resposta` usa `SqlTypes.LONG32NVARCHAR`, que vira `NCLOB` no Oracle e `NVARCHAR(MAX)` no SQL Server. Com `LONG32VARCHAR`, o `validate` do Hibernate recusava o SQL Server.
 - **Validação nos dois bancos:** as migrações foram testadas contra Oracle XE 21 (Testcontainers e Docker, num schema vazio e num schema onde o `00_instalar.sql` do repositório `database` já tinha rodado) e, com o `validate` do Hibernate, contra SQL Server 2022 em container, com o perfil `azure`. O SQL Server foi testado com seed, acentos, colunas JSON, idempotência e notificações.

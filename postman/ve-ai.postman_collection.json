@@ -607,7 +607,7 @@
     },
     {
       "name": "03 · Descrições (IA)",
-      "description": "A foto vai em multipart (campo imagem) e nunca é gravada. Com VEAI_IA_PROVEDOR=openai a resposta vem do modelo real (10 a 20 s); no modo falso, de respostas fixas. No Postman, se o arquivo não for encontrado, selecione postman/foto-calcada.jpg ou postman/foto-placa.jpg no campo imagem.",
+      "description": "A foto vai em multipart (campo imagem) e nunca é gravada. Com VEAI_IA_PROVEDOR=openai a resposta vem do modelo real (cerca de 5 a 7 s); no modo falso, de respostas fixas. No Postman, se o arquivo não for encontrado, selecione postman/foto-calcada.jpg ou postman/foto-placa.jpg no campo imagem.",
       "item": [
         {
           "name": "Descrever ambiente (foto da calçada)",
@@ -626,6 +626,7 @@
                   "  pm.expect(r.resumo).to.be.a(\"string\");",
                   "  pm.expect(r.objetos).to.be.an(\"array\");",
                   "  pm.expect(r.latenciaMs).to.be.a(\"number\");",
+                  "  pm.expect(r.novidade).to.be.a(\"boolean\");",
                   "});",
                   "pm.test(\"Perigos com direção e distância\", () => r.perigos.forEach(p => {",
                   "  pm.expect(p).to.have.all.keys(\"descricao\", \"direcao\", \"distanciaAprox\");",
@@ -635,7 +636,9 @@
                   "  if (r.sugestaoRelato) pm.expect(r.barreiraDetectada).to.eql(true);",
                   "});",
                   "pm.collectionVariables.set(\"descricaoId\", r.id);",
-                  "pm.test(\"Modo AMBIENTE\", () => pm.expect(r.modo).to.eql(\"AMBIENTE\"));"
+                  "pm.collectionVariables.set(\"sugestaoTipo\", r.sugestaoRelato ? r.sugestaoRelato.tipo : \"\");",
+                  "pm.test(\"Modo AMBIENTE\", () => pm.expect(r.modo).to.eql(\"AMBIENTE\"));",
+                  "pm.test(\"Sem anteriorId (modo manual), sempre é novidade\", () => pm.expect(r.novidade).to.eql(true));"
                 ]
               }
             }
@@ -672,6 +675,129 @@
           }
         },
         {
+          "name": "Modo automático: foto seguinte da caminhada (anteriorId)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Estrutura da descrição\", () => {",
+                  "  pm.expect(r.id).to.be.a(\"number\");",
+                  "  pm.expect(r.perigos).to.be.an(\"array\");",
+                  "  pm.expect(r.descricaoCompleta).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(r.resumo).to.be.a(\"string\");",
+                  "  pm.expect(r.objetos).to.be.an(\"array\");",
+                  "  pm.expect(r.latenciaMs).to.be.a(\"number\");",
+                  "  pm.expect(r.novidade).to.be.a(\"boolean\");",
+                  "});",
+                  "pm.test(\"Perigos com direção e distância\", () => r.perigos.forEach(p => {",
+                  "  pm.expect(p).to.have.all.keys(\"descricao\", \"direcao\", \"distanciaAprox\");",
+                  "  pm.expect([\"frente\", \"frente-direita\", \"direita\", \"frente-esquerda\", \"esquerda\"]).to.include(p.direcao);",
+                  "}));",
+                  "pm.test(\"Sugestão de relato só com barreira\", () => {",
+                  "  if (r.sugestaoRelato) pm.expect(r.barreiraDetectada).to.eql(true);",
+                  "});",
+                  "pm.test(\"Não repete a sugestão de relato da foto anterior\", () => {",
+                  "  const anterior = pm.collectionVariables.get(\"sugestaoTipo\");",
+                  "  if (anterior && r.sugestaoRelato) pm.expect(r.sugestaoRelato.tipo).to.not.eql(anterior);",
+                  "});",
+                  "pm.test(\"Sem novidade, a confirmação falada é curta\", () => {",
+                  "  if (r.novidade === false) pm.expect(r.descricaoCompleta.length).to.be.at.most(160);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenAna}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Modo automático: o app manda em anteriorId o id da resposta anterior. A IA compara as cenas: com novidade, a descricaoCompleta traz só o que mudou; sem novidade, é uma confirmação curta. O app fala as duas. A mesma sugestão de relato não se repete por 2 minutos. Aqui a foto é a mesma da requisição anterior (pessoa parada).",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-calcada.jpg"
+                },
+                {
+                  "key": "modo",
+                  "type": "text",
+                  "value": "AMBIENTE"
+                },
+                {
+                  "key": "anteriorId",
+                  "type": "text",
+                  "value": "{{descricaoId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "anteriorId de outra pessoa → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/descricoes",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenDiego}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "imagem",
+                  "type": "file",
+                  "src": "foto-calcada.jpg"
+                },
+                {
+                  "key": "modo",
+                  "type": "text",
+                  "value": "AMBIENTE"
+                },
+                {
+                  "key": "anteriorId",
+                  "type": "text",
+                  "value": "{{descricaoId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Ler texto (foto da placa)",
           "event": [
             {
@@ -688,6 +814,7 @@
                   "  pm.expect(r.resumo).to.be.a(\"string\");",
                   "  pm.expect(r.objetos).to.be.an(\"array\");",
                   "  pm.expect(r.latenciaMs).to.be.a(\"number\");",
+                  "  pm.expect(r.novidade).to.be.a(\"boolean\");",
                   "});",
                   "pm.test(\"Perigos com direção e distância\", () => r.perigos.forEach(p => {",
                   "  pm.expect(p).to.have.all.keys(\"descricao\", \"direcao\", \"distanciaAprox\");",
@@ -861,7 +988,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"É a descrição criada\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"descricaoId\"))));"
+                  "pm.test(\"É a descrição criada\", () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get(\"descricaoId\"))));",
+                  "pm.test(\"novidade não é gravada (null no histórico)\", () => pm.expect(pm.response.json().novidade).to.eql(null));"
                 ]
               }
             }

@@ -14,25 +14,38 @@ public final class DescricaoDtos {
 
     private DescricaoDtos() {}
 
-    @Schema(description = "Descrição gerada pela IA. O app fala a descricaoCompleta, que já começa pelos perigos (com posição e distância). perigos, resumo e objetos são dados estruturados para alertas, histórico e listas.")
+    @Schema(description = "Descrição gerada pela IA. O app fala a descricaoCompleta, que já começa pelos perigos (com posição e distância). "
+            + "No modo automático, sem novidade ela é uma confirmação curta (\"O poste e o carro continuam no mesmo lugar, à sua frente.\"). "
+            + "perigos, resumo e objetos são dados estruturados para alertas, histórico e listas.")
     public record DescricaoResposta(
             Long id,
             ModoDescricao modo,
             List<Perigo> perigos,
             String resumo,
             String descricaoCompleta,
+            @Schema(description = "Só na resposta do POST. Sem anteriorId é sempre true. Com anteriorId: true = algo mudou "
+                    + "(a descricaoCompleta traz só a mudança); false = mesma cena (a descricaoCompleta é uma confirmação curta). "
+                    + "O app fala a descricaoCompleta nos dois casos e pode usar novidade para, por exemplo, tocar um aviso sonoro antes. "
+                    + "null no histórico (não é gravado).")
+            Boolean novidade,
             List<String> objetos,
             boolean barreiraDetectada,
             TipoRelato barreiraTipo,
             int latenciaMs,
             Boolean util,
             Instant criadoEm,
-            @Schema(description = "Presente só quando a IA viu uma barreira estrutural com confiança alta")
+            @Schema(description = "Presente só quando a IA viu uma barreira estrutural com confiança alta. "
+                    + "No modo automático (com anteriorId), a mesma sugestão não se repete por 2 minutos")
             SugestaoRelato sugestaoRelato) {
 
-        public static DescricaoResposta de(Descricao d, SugestaoRelato sugestao) {
+        /** Para o histórico: novidade só existe na resposta do POST. */
+        public static DescricaoResposta de(Descricao d) {
+            return de(d, null, null);
+        }
+
+        public static DescricaoResposta de(Descricao d, Boolean novidade, SugestaoRelato sugestao) {
             return new DescricaoResposta(d.getId(), d.getModo(), d.getPerigos(), d.getResumo(), d.getDescricaoCompleta(),
-                    d.getObjetos(), d.isBarreiraDetectada(), d.getBarreiraTipo(), d.getLatenciaMs(), d.getUtil(),
+                    novidade, d.getObjetos(), d.isBarreiraDetectada(), d.getBarreiraTipo(), d.getLatenciaMs(), d.getUtil(),
                     d.getCriadoEm(), sugestao);
         }
     }

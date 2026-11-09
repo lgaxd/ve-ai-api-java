@@ -80,7 +80,15 @@ public abstract class IntegracaoTest {
      */
     protected static double[] pontoNovo(double[] centro) {
         int n = PONTOS.incrementAndGet();
-        return new double[]{centro[0] - 0.004 - (n % 10) * 0.0011, centro[1] + 0.006 + (n / 10) * 0.0011};
+        return new double[]{seisCasas(centro[0] - 0.004 - (n % 10) * 0.0011), seisCasas(centro[1] + 0.006 + (n / 10) * 0.0011)};
+    }
+
+    /**
+     * Mesma precisão da coluna NUMBER(9,6): sem isso, uma conta como -23.5503 - 0.0128 vira -23.563100000000002
+     * e não bate com o -23.5631 que o Oracle devolve.
+     */
+    private static double seisCasas(double valor) {
+        return Math.round(valor * 1_000_000d) / 1_000_000d;
     }
 
     /** Desloca um ponto alguns metros para o norte (1 m ≈ 0,000009°). */
