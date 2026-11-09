@@ -1,6 +1,8 @@
 package br.com.fiap.veai.descricao;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,7 @@ import br.com.fiap.veai.comum.Paginacao;
 import br.com.fiap.veai.config.VeAiProperties;
 import br.com.fiap.veai.descricao.DescricaoDtos.DescricaoResposta;
 import br.com.fiap.veai.descricao.DescricaoDtos.PerguntaResposta;
+import br.com.fiap.veai.ia.ContextoAnterior;
 import br.com.fiap.veai.ia.DescricaoIA;
 import br.com.fiap.veai.ia.DescritorImagem;
 import br.com.fiap.veai.ia.ImagemRecebida;
@@ -28,33 +31,49 @@ public class DescricaoService {
     private final UsuarioRepository usuarios;
     private final DescritorImagem descritor;
     private final LimitadorRequisicoes limitador;
+    private final MemoriaSugestoes sugestoes;
     private final Clock clock;
     private final double confiancaMinima;
+    private final int ladoMaximoFoto;
+    private final Duration validadeContexto;
     private final TransactionTemplate transacao;
 
     public DescricaoService(DescricaoRepository repository, UsuarioRepository usuarios, DescritorImagem descritor,
-                            LimitadorRequisicoes limitador, Clock clock, VeAiProperties properties,
-                            PlatformTransactionManager transactionManager) {
+                            LimitadorRequisicoes limitador, MemoriaSugestoes sugestoes, Clock clock,
+                            VeAiProperties properties, PlatformTransactionManager transactionManager) {
         this.transacao = new TransactionTemplate(transactionManager);
         this.repository = repository;
         this.usuarios = usuarios;
         this.descritor = descritor;
         this.limitador = limitador;
+        this.sugestoes = sugestoes;
         this.clock = clock;
         this.confiancaMinima = properties.ia().confiancaMinima();
+        this.ladoMaximoFoto = properties.ia().ladoMaximoFoto();
+        this.validadeContexto = properties.continuo().validadeContexto();
     }
 
     /**
-     * Fluxo principal: valida a foto, consome o rate limit, chama a IA, grava só o texto e diz se há
+     * Fluxo principal: valida e reduz a foto, consome o rate limit, chama a IA, grava só o texto e diz se há
      * barreira para sugerir um relato. A chamada à IA fica fora de transação (não segura conexão do banco).
+     *
+     * <p>Modo automático: o app manda em {@code anteriorId} a última descrição que falou. A IA compara a
+     * cena nova com ela e responde {@code novidade}; o app só fala quando é true. A mesma sugestão de
+     * relato também não se repete a cada foto. Sem {@code anteriorId} (modo manual), tudo é como antes.
      */
-    public DescricaoResposta descrever(Long usuarioId, ModoDescricao modo, MultipartFile arquivo) {
-        ImagemRecebida imagem = ValidadorImagem.validar(arquivo);
+    public DescricaoResposta descrever(Long usuarioId, ModoDescricao modo, MultipartFile arquivo, Long anteriorId) {
+        ImagemRecebida imagem = RedutorImagem.reduzir(ValidadorImagem.validar(arquivo), ladoMaximoFoto);
+        Descricao anterior = anteriorId == null ? null
+                : daPessoa(usuarioId, anteriorId, "Descrição anterior não encontrada.");
         limitador.consumir(usuarioId);
+        ContextoAnterior contexto = contexto(anterior, modo, clock.instant(), validadeContexto);
 
         long inicio = System.nanoTime();
-        DescricaoIA ia = descritor.descrever(imagem, modo).normalizada();
+        DescricaoIA ia = descritor.descrever(imagem, modo, contexto).normalizada();
         int latenciaMs = (int) ((System.nanoTime() - inicio) / 1_000_000);
+        // Rede de segurança: se antes não havia perigo e agora há, a pessoa precisa ouvir, diga a IA o que disser
+        boolean novidade = contexto == null || ia.novidade()
+                || (anterior.getPerigos().isEmpty() && !ia.perigos().isEmpty());
 
         String completa = modo == ModoDescricao.TEXTO && ia.textoLido() != null && !ia.textoLido().isBlank()
                 ? ia.textoLido() : ia.descricaoCompleta();
@@ -66,26 +85,44 @@ public class DescricaoService {
                     clock.instant()));
         });
 
-        var sugestao = RegraSugestaoRelato.avaliar(ia.barreira(), confiancaMinima).orElse(null);
-        return DescricaoResposta.de(salva, sugestao);
+        boolean automatico = contexto != null;
+        var sugestao = RegraSugestaoRelato.avaliar(ia.barreira(), confiancaMinima)
+                .filter(s -> sugestoes.deveSugerir(usuarioId, s.tipo(), automatico))
+                .orElse(null);
+        return DescricaoResposta.de(salva, novidade, sugestao);
+    }
+
+    /**
+     * A descrição anterior só vale como referência no modo AMBIENTE e por pouco tempo: depois da validade,
+     * a pessoa pode ter parado ou mudado de lugar, e a API descreve a cena inteira de novo.
+     */
+    static ContextoAnterior contexto(Descricao anterior, ModoDescricao modo, Instant agora, Duration validadeContexto) {
+        if (anterior == null || modo != ModoDescricao.AMBIENTE || anterior.getModo() != ModoDescricao.AMBIENTE) {
+            return null;
+        }
+        Duration idade = Duration.between(anterior.getCriadoEm(), agora);
+        if (idade.compareTo(validadeContexto) > 0) {
+            return null;
+        }
+        return new ContextoAnterior(anterior.getDescricaoCompleta(), Math.max(0, idade.toSeconds()));
     }
 
     @Transactional(readOnly = true)
     public PaginaResposta<DescricaoResposta> listar(Long usuarioId, Integer page, Integer size) {
         var pagina = repository.findByUsuarioId(usuarioId, Paginacao.de(page, size, Sort.by(Sort.Direction.DESC, "criadoEm", "id")));
-        return PaginaResposta.de(pagina, d -> DescricaoResposta.de(d, null));
+        return PaginaResposta.de(pagina, d -> DescricaoResposta.de(d));
     }
 
     @Transactional(readOnly = true)
     public DescricaoResposta buscar(Long usuarioId, Long id) {
-        return DescricaoResposta.de(daPessoa(usuarioId, id), null);
+        return DescricaoResposta.de(daPessoa(usuarioId, id));
     }
 
     @Transactional
     public DescricaoResposta avaliar(Long usuarioId, Long id, boolean util) {
         Descricao d = daPessoa(usuarioId, id);
         d.avaliar(util);
-        return DescricaoResposta.de(d, null);
+        return DescricaoResposta.de(d);
     }
 
     /** Relatos criados a partir desta descrição continuam existindo (descricao_id vira NULL). */
@@ -104,14 +141,17 @@ public class DescricaoService {
             throw ApiException.proibido("Ative a pergunta livre por voz nas preferências.");
         }
         daPessoa(usuarioId, id);
-        ImagemRecebida imagem = ValidadorImagem.validar(arquivo);
+        ImagemRecebida imagem = RedutorImagem.reduzir(ValidadorImagem.validar(arquivo), ladoMaximoFoto);
         limitador.consumir(usuarioId);
         return new PerguntaResposta(descritor.responder(imagem, pergunta.strip()));
     }
 
     private Descricao daPessoa(Long usuarioId, Long id) {
-        return repository.findByIdAndUsuarioId(id, usuarioId)
-                .orElseThrow(() -> ApiException.naoEncontrado("Descrição não encontrada."));
+        return daPessoa(usuarioId, id, "Descrição não encontrada.");
+    }
+
+    private Descricao daPessoa(Long usuarioId, Long id, String mensagem) {
+        return repository.findByIdAndUsuarioId(id, usuarioId).orElseThrow(() -> ApiException.naoEncontrado(mensagem));
     }
 
     private static String limitar(String texto, int max) {

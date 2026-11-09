@@ -174,6 +174,12 @@ paths:
       tags:
       - Descrições
       summary: Descreve a foto (perigos primeiro) e sugere relato se houver barreira
+      description: "Modo manual: envie só a foto. Modo automático (fotos a cada poucos\
+        \ segundos enquanto a pessoa anda): envie também anteriorId, o id da última\
+        \ descrição que o app falou. A IA compara as cenas e responde novidade; o\
+        \ app só fala quando novidade = true. A mesma sugestão de relato não se repete\
+        \ por 2 minutos. Uma descrição anterior com mais de 2 minutos é ignorada (a\
+        \ cena é descrita inteira de novo)."
       operationId: descrever
       parameters:
       - name: modo
@@ -185,6 +191,13 @@ paths:
           enum:
           - AMBIENTE
           - TEXTO
+      - name: anteriorId
+        in: query
+        description: "Modo automático: id da última descrição falada pelo app"
+        required: false
+        schema:
+          type: integer
+          format: int64
       requestBody:
         content:
           multipart/form-data:
@@ -199,6 +212,12 @@ paths:
       responses:
         "201":
           description: Descrição criada
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DescricaoResposta"
+        "404":
+          description: anteriorId não existe ou é de outra pessoa
           content:
             '*/*':
               schema:
@@ -825,7 +844,10 @@ components:
           $ref: "#/components/schemas/RelatoResposta"
     DescricaoResposta:
       type: object
-      description: "Descrição gerada pela IA. O app fala a descricaoCompleta, que já começa pelos perigos (com posição e distância). perigos, resumo e objetos são dados estruturados para alertas, histórico e listas."
+      description: "Descrição gerada pela IA. O app fala a descricaoCompleta, que\
+        \ já começa pelos perigos (com posição e distância). No modo automático, o\
+        \ app só fala quando novidade = true. perigos, resumo e objetos são dados\
+        \ estruturados para alertas, histórico e listas."
       properties:
         id:
           type: integer
@@ -843,6 +865,11 @@ components:
           type: string
         descricaoCompleta:
           type: string
+        novidade:
+          type: boolean
+          description: "Só na resposta do POST. true = o app deve falar a descricaoCompleta.\
+            \ Sem anteriorId é sempre true; com anteriorId, false quando a cena é\
+            \ a mesma que a pessoa acabou de ouvir. null no histórico (não é gravado)."
         objetos:
           type: array
           items:
@@ -869,8 +896,9 @@ components:
           format: date-time
         sugestaoRelato:
           $ref: "#/components/schemas/SugestaoRelato"
-          description: Presente só quando a IA viu uma barreira estrutural com confiança
-            alta
+          description: "Presente só quando a IA viu uma barreira estrutural com confianç\
+            a alta. No modo automático (com anteriorId), a mesma sugestão não se repete\
+            \ por 2 minutos"
     Perigo:
       type: object
       properties:

@@ -49,7 +49,7 @@ class RegrasDescricaoTest {
     @DisplayName("rate limit: 3 por minuto, a 4ª dá 429 com Retry-After, e a janela seguinte libera")
     void rateLimit() {
         var relogio = new RelogioAjustavel(Instant.parse("2026-11-07T12:00:10Z"));
-        var props = new VeAiProperties(null, null, null, new VeAiProperties.RateLimit(3), null, null);
+        var props = new VeAiProperties(null, null, null, null, new VeAiProperties.RateLimit(3), null, null);
         var limitador = new LimitadorRequisicoes(props, relogio);
 
         limitador.consumir(1L);

@@ -2,7 +2,7 @@
 
 Global Solution 2026/2 · FIAP 2TDSPX · **Java Advanced**
 
-O **Vê AI** é um assistente em português para pessoas com deficiência visual. A pessoa tira uma foto e a IA descreve o ambiente por áudio, **falando os perigos primeiro**. Quando a IA identifica uma barreira estrutural (buraco, calçada obstruída, rampa irregular, falta de piso tátil, semáforo sem som), o app pergunta se a pessoa quer avisar a rede de apoio. O relato chega com GPS ao gestor da região (ONG/CRAS), que faz a triagem e o encaminha ao órgão público até a resolução.
+O **Vê AI** é um assistente em português para pessoas com deficiência visual. Enquanto a pessoa anda, o celular fotografa o caminho a cada poucos segundos e a IA narra por áudio **só o que muda, com os perigos primeiro** (modo automático). A pessoa também pode pedir uma descrição na hora ou a leitura de um texto, como placa ou embalagem (modo manual). Quando a IA identifica uma barreira estrutural (buraco, calçada obstruída, rampa irregular, falta de piso tátil, semáforo sem som), o app pergunta se a pessoa quer avisar a rede de apoio. O relato chega com GPS ao gestor da região (ONG/CRAS), que faz a triagem e o encaminha ao órgão público até a resolução.
 
 Esta é a API consumida pelo app mobile (React Native). O mesmo contrato também é implementado em .NET.
 
@@ -18,7 +18,7 @@ Esta é a API consumida pelo app mobile (React Native). O mesmo contrato também
 | Deploy da API (Swagger) | `___` |
 | Vídeo pitch | `___` |
 | Contrato OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
-| Coleção Postman | [postman/](postman) (60 requisições com testes automáticos) |
+| Coleção Postman | [postman/](postman) (62 requisições com testes automáticos) |
 | Decisões de arquitetura | [docs/decisoes-arquitetura.md](docs/decisoes-arquitetura.md) |
 
 ---
@@ -178,7 +178,7 @@ Todas as rotas, exceto `/auth/**`, `/health` e o Swagger, exigem `Authorization:
 | `POST /auth/registrar` | público | cria uma conta de cidadão |
 | `POST /auth/login` | público | devolve o JWT (8 h) e o papel |
 | `GET /usuarios/me` · `PUT /usuarios/me/preferencias` | logado | perfil, velocidade da voz e pergunta livre |
-| `POST /descricoes` | CIDADAO | multipart `imagem` (JPEG/PNG/WebP, até 5 MB) + `modo`. Devolve perigos, resumo e `sugestaoRelato`. Limite de 20 por minuto (**429** + `Retry-After`) |
+| `POST /descricoes` | CIDADAO | multipart `imagem` (JPEG/PNG/WebP, até 5 MB) + `modo` + `anteriorId` (opcional, modo automático). Devolve perigos, `descricaoCompleta` (o texto falado), `novidade` e `sugestaoRelato`. Limite de 20 por minuto (**429** + `Retry-After`) |
 | `GET /descricoes` · `GET /descricoes/{id}` · `PATCH /descricoes/{id}/avaliacao` · `DELETE /descricoes/{id}` | CIDADAO | histórico paginado, avaliação "foi útil?" e exclusão |
 | `POST /descricoes/{id}/pergunta` | CIDADAO | pergunta livre por voz sobre a foto (nada é gravado) |
 | `POST /relatos` | CIDADAO | **regra dos 30 m**: `201 CRIADO`, ou `200 APOIO_REGISTRADO` / `JA_REGISTRADO`. Aceita o header `Idempotency-Key` |
@@ -194,18 +194,20 @@ Todas as rotas, exceto `/auth/**`, `/health` e o Swagger, exigem `Authorization:
 - **Prioridade:** peso da gravidade (BAIXA 1, MÉDIA 3, ALTA 5) × (1 + apoios) + dias em aberto. Vale 0 para relatos finalizados. É recalculada a cada mudança e todo dia às 3h. É a mesma fórmula da `fn_prioridade_relato` do Oracle.
 - **Status:** `ABERTO → EM_TRIAGEM → ENCAMINHADO → RESOLVIDO`, sem pular etapa e sem voltar. `DESCARTADO` pode vir de qualquer status não final e exige motivo. `ENCAMINHADO` exige o protocolo do órgão. Transição inválida responde **422**.
 - **Deduplicação:** um relato **não finalizado**, do **mesmo tipo** e a **até 30 m** (Haversine) recebe +1 apoio em vez de virar um relato novo.
+- **Modo automático:** o app fotografa a cada poucos segundos e manda em `anteriorId` o id da última descrição que falou. A IA compara a cena nova com o que a pessoa acabou de ouvir e responde `novidade`; o app só fala quando é `true`. Um perigo novo sempre é novidade. A mesma sugestão de relato não se repete por 2 minutos, e uma descrição anterior com mais de 2 minutos é ignorada (a cena é descrita inteira de novo). Sem `anteriorId` (modo manual), a descrição é sempre completa.
+- **Latência:** a foto é reduzida para 1024 px antes de ir para a OpenAI e o modelo responde sem raciocínio estendido (`OPENAI_REASONING_EFFORT=none`): cerca de 3 s por foto, contra 18 s com a foto original e o padrão do modelo, e com cerca de 5 vezes menos tokens.
 - **Privacidade:** a foto nunca é gravada (nem em banco, nem em disco, nem em log) e o GPS só é guardado no relato.
 
 ### Coleção Postman
 
-A pasta [postman/](postman) tem a coleção `ve-ai.postman_collection.json`, com **60 requisições e 129 testes automáticos**, os ambientes `local` e `nuvem` e as duas fotos usadas nas descrições.
+A pasta [postman/](postman) tem a coleção `ve-ai.postman_collection.json`, com **62 requisições e 139 testes automáticos**, os ambientes `local` e `nuvem` e as duas fotos usadas nas descrições.
 
 | Pasta | O que cobre |
 |---|---|
 | 00 · Saúde | `/health` público |
 | 01 · Autenticação | login dos 4 usuários do seed, cadastro de cidadão, e-mail repetido (409), validação (400), senha errada e rota sem token (401) |
 | 02 · Usuário e regiões | perfil, regiões da gestora, preferências de voz (e limite inválido) |
-| 03 · Descrições (IA) | foto da calçada (AMBIENTE), placa (TEXTO), histórico paginado, avaliação, pergunta livre, exclusão, 400/403/404 |
+| 03 · Descrições (IA) | foto da calçada (AMBIENTE), foto seguinte no modo automático (`anteriorId`, `novidade`, sugestão sem repetir), placa (TEXTO), histórico paginado, avaliação, pergunta livre, exclusão, 400/403/404 |
 | 04 · Relatos | regra dos 30 m (CRIADO, APOIO_REGISTRADO, JA_REGISTRADO), `Idempotency-Key` (repetição e conflito), edição, exclusão (409 com apoios) |
 | 05 · Gestor | fila por prioridade e filtros, gestor de outra região (403), máquina de estados com protocolo, transições inválidas (422) e histórico |
 | 06 · Notificações | avisos gerados pelo consumidor RabbitMQ para autor, apoiador e gestora; marcar como lida |

@@ -28,8 +28,10 @@ public class OpenAiDescritor implements DescritorImagem {
     private static final Logger log = LoggerFactory.getLogger(OpenAiDescritor.class);
 
     private static final String PEDIDO_AMBIENTE =
-            "Esta foto foi tirada automaticamente, na altura do peito, na direção em que a pessoa anda. "
+            "Esta foto foi tirada na altura do peito, na direção em que a pessoa anda. "
                     + "Descreva o que está à frente dela seguindo as regras. A descricaoCompleta é o texto falado: comece pelos perigos.";
+    private static final String SEM_CONTEXTO =
+            " Não há DESCRIÇÃO ANTERIOR: use \"novidade\": true e descreva a cena inteira.";
     private static final String PEDIDO_TEXTO =
             "Leia o texto desta foto exatamente como está escrito e coloque-o em textoLido. "
                     + "Em resumo, diga em uma frase do que se trata (placa, cardápio, embalagem, documento...). "
@@ -43,8 +45,8 @@ public class OpenAiDescritor implements DescritorImagem {
     }
 
     @Override
-    public DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo) {
-        String pedido = modo == ModoDescricao.TEXTO ? PEDIDO_TEXTO : PEDIDO_AMBIENTE;
+    public DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo, ContextoAnterior anterior) {
+        String pedido = pedido(modo, anterior);
         try {
             DescricaoIA resposta = chatClient.prompt()
                     .user(u -> u.text(pedido).media(imagem.tipo(), new ByteArrayResource(imagem.bytes())))
@@ -59,6 +61,20 @@ public class OpenAiDescritor implements DescritorImagem {
             throw new ApiException(HttpStatus.BAD_GATEWAY,
                     "Não consegui descrever a foto agora. Tente de novo em alguns segundos.");
         }
+    }
+
+    static String pedido(ModoDescricao modo, ContextoAnterior anterior) {
+        if (modo == ModoDescricao.TEXTO) {
+            return PEDIDO_TEXTO;
+        }
+        if (anterior == null) {
+            return PEDIDO_AMBIENTE + SEM_CONTEXTO;
+        }
+        // Chaves e aspas saem do texto anterior: chaves são marcadores de template no Spring AI
+        String ouvido = anterior.descricaoCompleta().replaceAll("[{}\"]", "");
+        return PEDIDO_AMBIENTE + "\n\nModo automático. DESCRIÇÃO ANTERIOR (falada há " + anterior.segundosAtras()
+                + " segundos): \"" + ouvido + "\"\n"
+                + "Esta é a foto seguinte da caminhada. Siga as regras de CONTINUIDADE.";
     }
 
     @Override

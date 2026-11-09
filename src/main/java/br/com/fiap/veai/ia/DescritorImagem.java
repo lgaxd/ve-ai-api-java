@@ -9,7 +9,11 @@ import br.com.fiap.veai.descricao.ModoDescricao;
  */
 public interface DescritorImagem {
 
-    DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo);
+    /**
+     * Descreve a foto. {@code anterior} vem só no modo automático (null no manual e na primeira foto):
+     * com ele, o modelo compara a cena com o que a pessoa já ouviu e preenche {@code novidade}.
+     */
+    DescricaoIA descrever(ImagemRecebida imagem, ModoDescricao modo, ContextoAnterior anterior);
 
     /** Pergunta livre por voz sobre a última foto. Nada é gravado. */
     String responder(ImagemRecebida imagem, String pergunta);

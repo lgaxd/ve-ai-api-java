@@ -67,6 +67,11 @@ spring:
         # gpt-6-luna) recusam qualquer valor diferente do padrão (1) com HTTP 400.
         # Para modelos como gpt-4o/gpt-4.1, dá para fixar, por exemplo, OPENAI_TEMPERATURE=0.2.
         temperature: ${OPENAI_TEMPERATURE:}
+        # Quanto o modelo "pensa" antes de responder: none, low, medium, high ou xhigh.
+        # Medido pela API com o gpt-6-luna e foto de 1024 px: padrão do modelo ~18 s, low 7-10 s, none 2-4 s.
+        # none é o padrão: no modo automático a demora também é risco (com 8 s de atraso a pessoa já
+        # andou ~10 m). Nos testes, none ainda acertou melhor quando a cena não mudou.
+        reasoning-effort: ${OPENAI_REASONING_EFFORT:none}
 
   jackson:
     default-property-inclusion: always
@@ -115,6 +120,15 @@ veai:
     modelo: ${OPENAI_MODEL:gpt-6-luna}
     confianca-minima: 0.7
     tamanho-maximo-bytes: 5242880
+    # A foto do celular (4000 px ou mais) é reduzida antes de ir para a OpenAI: ~5x menos tokens
+    # (custo) e resposta mais rápida, sem perder o que importa para descrever o caminho.
+    lado-maximo-foto: 1024
+  continuo:
+    # Modo automático: a descrição anterior só serve de referência por este tempo. Depois disso,
+    # a API descreve a cena inteira de novo (reorientação periódica).
+    validade-contexto: 2m
+    # A mesma sugestão de relato (mesmo tipo de barreira) não é repetida neste intervalo
+    janela-sugestao: 2m
   rag:
     # Serviço RAG do Pedro (FastAPI). Vazio = desligado.
     url: ${VEAI_RAG_URL:}

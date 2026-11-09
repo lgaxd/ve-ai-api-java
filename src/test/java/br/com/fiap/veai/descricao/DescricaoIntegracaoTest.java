@@ -38,6 +38,50 @@ class DescricaoIntegracaoTest extends IntegracaoTest {
     }
 
     @Test
+    @DisplayName("modo automático: mesma cena não é novidade nem repete a sugestão; cena nova é novidade")
+    void modoAutomatico() throws Exception {
+        String token = novoCidadao();
+        // 1ª foto (modo manual ou início da caminhada): novidade sempre true, com sugestão
+        Integer falada = ler(descrever(token, foto(0), "AMBIENTE").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.novidade").value(true))
+                .andExpect(jsonPath("$.sugestaoRelato.tipo").value("OBSTRUCAO_PERMANENTE")).andReturn(), "$.id");
+
+        // Mesma cena com anteriorId: sem novidade (o app não fala) e sem repetir a pergunta do relato
+        Integer repetida = ler(descrever(token, foto(0), "AMBIENTE", falada).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.novidade").value(false))
+                .andExpect(jsonPath("$.descricaoCompleta").value("Poste no meio da calçada, a cerca de 3 metros. Calçada estreita."))
+                .andExpect(jsonPath("$.barreiraDetectada").value(true))
+                .andExpect(jsonPath("$.sugestaoRelato").isEmpty()).andReturn(), "$.id");
+
+        // Cena diferente: novidade
+        descrever(token, foto(1), "AMBIENTE", falada).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.novidade").value(true));
+
+        // novidade não é gravada: no histórico vem null
+        mvc.perform(get("/descricoes/" + repetida).header(auth(), bearer(token)))
+                .andExpect(jsonPath("$.novidade").isEmpty());
+    }
+
+    @Test
+    @DisplayName("modo manual (sem anteriorId) sempre sugere o relato; anteriorId alheio ou inexistente dá 404")
+    void modoManualEAnteriorInvalido() throws Exception {
+        String token = novoCidadao();
+        Integer id = ler(descrever(token, foto(0), "AMBIENTE")
+                .andExpect(jsonPath("$.sugestaoRelato").isNotEmpty()).andReturn(), "$.id");
+        descrever(token, foto(0), "AMBIENTE")
+                .andExpect(jsonPath("$.novidade").value(true))
+                .andExpect(jsonPath("$.sugestaoRelato").isNotEmpty());
+
+        String outro = novoCidadao();
+        descrever(outro, foto(0), "AMBIENTE", id).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").value("Descrição anterior não encontrada."));
+        descrever(outro, foto(0), "AMBIENTE", 999_999_999).andExpect(status().isNotFound());
+        // TEXTO ignora o anteriorId (leitura de texto é sempre completa)
+        descrever(token, foto(2), "TEXTO", id).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.novidade").value(true));
+    }
+
+    @Test
     @DisplayName("perigo momentâneo e foto escura (confiança baixa) nunca sugerem relato")
     void naoSugere() throws Exception {
         String token = novoCidadao();
@@ -135,6 +179,12 @@ class DescricaoIntegracaoTest extends IntegracaoTest {
     private org.springframework.test.web.servlet.ResultActions descrever(String token, MockMultipartFile foto, String modo)
             throws Exception {
         return mvc.perform(multipart("/descricoes").file(foto).param("modo", modo).header(auth(), bearer(token)));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions descrever(String token, MockMultipartFile foto, String modo,
+                                                                         Integer anteriorId) throws Exception {
+        return mvc.perform(multipart("/descricoes").file(foto).param("modo", modo)
+                .param("anteriorId", String.valueOf(anteriorId)).header(auth(), bearer(token)));
     }
 
     private org.springframework.test.web.servlet.ResultActions perguntar(String token, Integer id) throws Exception {
