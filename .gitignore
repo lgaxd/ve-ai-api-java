@@ -37,3 +37,6 @@ build/
 *.log
 # Guia interno do app mobile (não versionado)
 GUIA-APP-MOBILE.md
+
+# Deploy na Azure: nomes e região locais (os segredos ficam no .env)
+scripts/deploy/.env.deploy
