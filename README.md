@@ -15,7 +15,7 @@ Esta é a API consumida pelo app mobile (React Native). O mesmo contrato também
 
 | Link | |
 |---|---|
-| Deploy da API (Swagger) | `___` |
+| Deploy da API (Swagger) | https://561413-veai-java-api.azurewebsites.net/swagger-ui.html (saúde: [/health](https://561413-veai-java-api.azurewebsites.net/health)) |
 | Vídeo pitch | `___` |
 | Contrato OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
 | Coleção Postman | [postman/](postman) (62 requisições com testes automáticos) |
@@ -234,6 +234,26 @@ curl -s -X POST localhost:8080/relatos -H "Authorization: Bearer $TOKEN" \
   -d '{"tipo":"CALCADA_DANIFICADA","gravidade":"ALTA","texto":"Buraco enorme","latitude":-23.56620,"longitude":-46.68436}'
 # → 200 {"resultado":"APOIO_REGISTRADO","apoioRegistrado":true,"relato":{"id":1,"totalApoios":3,...}}
 ```
+
+### Deploy na nuvem (Azure App Service)
+
+A API roda num Web App Linux (Java 21, plano B1) na Azure e usa o **Oracle da FIAP** (perfil `fiap`), o **CloudAMQP** e a **OpenAI**. Não há front publicado: a demonstração é feita no app mobile (Expo), que consome esta API. Os scripts ficam em [scripts/deploy/](scripts/deploy/) (Azure CLI, bash):
+
+| Script | Função |
+|---|---|
+| `01-create-infra.sh` | Resource Group, plano B1, Web App da API (Java 21) e variáveis de ambiente (App Settings) |
+| `02-deploy-api.sh` | Build do JAR (JDK 21), publicação e espera pelo `/health` UP (Oracle, RabbitMQ e OpenAI) |
+| `03-smoke-test.sh` | Health, Swagger, 401 sem token, login da cidadã do seed, componentes UP e leituras do Oracle (só leitura) |
+| `up.sh` | Executa 01 → 03 em sequência (espera uma exclusão anterior terminar) |
+| `99-delete-infra.sh` | Remove o Resource Group (o Oracle da FIAP e o CloudAMQP não são afetados) |
+
+```bash
+cp scripts/deploy/.env.deploy.example scripts/deploy/.env.deploy   # nomes e região (fora do Git)
+az login
+bash scripts/deploy/up.sh                                          # ~10 minutos
+```
+
+Os segredos (`DB_*`, `JWT_SECRET`, `OPENAI_API_KEY`, `RABBITMQ_URL`) vêm do `.env` da raiz e vão para os App Settings do Web App; nada é gravado no Git. URL publicada: https://561413-veai-java-api.azurewebsites.net
 
 ---
 
