@@ -40,3 +40,5 @@ GUIA-APP-MOBILE.md
 
 # Deploy na Azure: nomes e região locais (os segredos ficam no .env)
 scripts/deploy/.env.deploy
+# Roteiro de gravação do vídeo de apresentação (fica só na máquina)
+docs/roteiro-video-apresentacao.md

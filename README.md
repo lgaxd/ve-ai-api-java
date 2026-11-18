@@ -16,7 +16,8 @@ Esta é a API consumida pelo app mobile (React Native). O mesmo contrato também
 | Link | |
 |---|---|
 | Deploy da API (Swagger) | https://561413-veai-java-api.azurewebsites.net/swagger-ui.html (saúde: [/health](https://561413-veai-java-api.azurewebsites.net/health)) |
-| Vídeo pitch | `___` |
+| Vídeo pitch | https://www.youtube.com/watch?v=3nQ493onYC8 |
+| Vídeo de apresentação (demo com o app, modelagem, JWT, Spring AI e RabbitMQ) | https://www.youtube.com/watch?v=eiUfwWEncfQ |
 | Contrato OpenAPI | [docs/openapi.yaml](docs/openapi.yaml) |
 | Coleção Postman | [postman/](postman) (62 requisições com testes automáticos) |
 | Decisões de arquitetura | [docs/decisoes-arquitetura.md](docs/decisoes-arquitetura.md) |
@@ -258,6 +259,12 @@ Os segredos (`DB_*`, `JWT_SECRET`, `OPENAI_API_KEY`, `RABBITMQ_URL`) vêm do `.e
 ---
 
 ## 5. Arquitetura
+
+### Modelo de dados
+
+![Modelo de dados](docs/img/modelo-dados.png)
+
+Gerado por [docs/gerar_modelo.py](docs/gerar_modelo.py) a partir das entidades JPA.
 
 ```
 App (React Native) ──HTTPS + JWT──▶ API Spring Boot ──JPA/Flyway──▶ Oracle (FIAP) | Azure SQL
